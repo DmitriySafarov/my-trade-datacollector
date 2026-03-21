@@ -1,0 +1,12 @@
+.git
+.gitignore
+.venv
+.pytest_cache
+.ruff_cache
+__pycache__
+*.pyc
+node_modules
+autopilot/sessions
+.codex/sessions
+frontend
+tests

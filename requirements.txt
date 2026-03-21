@@ -1,0 +1,6 @@
+aiohttp==3.13.3
+asyncpg==0.31.0
+feedparser==6.0.12
+finnhub-python>=2.4,<3.0
+fredapi>=0.5,<1.0
+hyperliquid-python-sdk>=0.22,<1.0

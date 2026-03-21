@@ -2,16 +2,16 @@
 
 ## Phase 0: Infrastructure
 
-- [ ] P0.1: Docker Compose (PostgreSQL 16 + TimescaleDB + Python 3.12 service)
+- [x] P0.1: Docker Compose (PostgreSQL 16 + TimescaleDB + Python 3.12 service)
 - [ ] P0.2: Bronze tables — all 19 hypertables (hl_trades, hl_l2book, hl_asset_ctx, hl_candles, bn_agg_trades, bn_depth, bn_mark_price, bn_liquidations, bn_tickers, bn_klines, news, fred_data, fear_greed, cc_exchange_vol, cc_price, finnhub_quotes, market_status, s3_trades, s3_l2book)
 - [ ] P0.3: Silver views (v_trades, v_funding, v_orderbook, v_oi, v_candles, v_news_deduped)
-- [ ] P0.4: Settings table (database-backed config)
+- [x] P0.4: Settings table (database-backed config)
 - [ ] P0.5: TimescaleDB compression policies (48h raw → compressed)
-- [ ] P0.6: asyncpg connection pool + batch writer (dual trigger)
-- [ ] P0.7: Base collector class (start, stop, health check interface)
-- [ ] P0.8: Config loader (env vars for bootstrap, DB settings for runtime)
-- [ ] P0.9: Logging setup (structured, source ID in every record)
-- [ ] P0.10: Main entrypoint (startup sequence, graceful shutdown on SIGTERM)
+- [x] P0.6: asyncpg connection pool + batch writer (dual trigger)
+- [x] P0.7: Base collector class (start, stop, health check interface)
+- [x] P0.8: Config loader (env vars for bootstrap, DB settings for runtime)
+- [x] P0.9: Logging setup (structured, source ID in every record)
+- [x] P0.10: Main entrypoint (startup sequence, graceful shutdown on SIGTERM)
 
 ## Phase 1: Hyperliquid WS
 

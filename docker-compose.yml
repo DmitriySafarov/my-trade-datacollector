@@ -1,0 +1,71 @@
+services:
+  postgres:
+    image: timescale/timescaledb:latest-pg16
+    container_name: data-collector-postgres
+    environment:
+      POSTGRES_DB: ${DB_NAME:-collector}
+      POSTGRES_USER: ${DB_USER:-collector}
+      POSTGRES_PASSWORD: ${DB_PASSWORD:-collector}
+    ports:
+      - "127.0.0.1:${DB_PORT:-55432}:5432"
+    healthcheck:
+      test:
+        [
+          "CMD-SHELL",
+          "pg_isready -U ${DB_USER:-collector} -d ${DB_NAME:-collector}",
+        ]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 10s
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+    restart: unless-stopped
+
+  collector:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: data-collector-app
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      DB_HOST: postgres
+      DB_PORT: 5432
+      DB_NAME: ${DB_NAME:-collector}
+      DB_USER: ${DB_USER:-collector}
+      DB_PASSWORD: ${DB_PASSWORD:-collector}
+      DB_SSL: ${DB_SSL:-disable}
+      COLLECTOR_SERVICE_NAME: ${COLLECTOR_SERVICE_NAME:-data-collector}
+      COLLECTOR_LOG_LEVEL: ${COLLECTOR_LOG_LEVEL:-INFO}
+      COLLECTOR_HEALTH_HOST: 0.0.0.0
+      COLLECTOR_HEALTH_PORT: 8080
+      COLLECTOR_DB_POOL_MIN_SIZE: ${COLLECTOR_DB_POOL_MIN_SIZE:-2}
+      COLLECTOR_DB_POOL_MAX_SIZE: ${COLLECTOR_DB_POOL_MAX_SIZE:-10}
+      COLLECTOR_SETTINGS_REFRESH_SECONDS: ${COLLECTOR_SETTINGS_REFRESH_SECONDS:-30}
+      COLLECTOR_DEFAULT_BATCH_COUNT: ${COLLECTOR_DEFAULT_BATCH_COUNT:-500}
+      COLLECTOR_DEFAULT_BATCH_SECONDS: ${COLLECTOR_DEFAULT_BATCH_SECONDS:-2.0}
+      COLLECTOR_SHUTDOWN_TIMEOUT_SECONDS: ${COLLECTOR_SHUTDOWN_TIMEOUT_SECONDS:-15}
+      FINNHUB_API_KEY: ${FINNHUB_API_KEY:-}
+      FRED_API_KEY: ${FRED_API_KEY:-}
+      BINANCE_REST_BASE_URL: ${BINANCE_REST_BASE_URL:-https://fapi.binance.com}
+      HYPERLIQUID_API_URL: ${HYPERLIQUID_API_URL:-https://api.hyperliquid.xyz}
+    ports:
+      - "127.0.0.1:${COLLECTOR_HEALTH_PORT:-8080}:8080"
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "python",
+          "-c",
+          "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8080/health', timeout=3).read()",
+        ]
+      interval: 15s
+      timeout: 5s
+      retries: 10
+      start_period: 20s
+    restart: unless-stopped
+
+volumes:
+  postgres-data:
