@@ -1,6 +1,7 @@
 export type Severity = "critical" | "important" | "suggestion";
 export type SandboxMode = "read-only" | "workspace-write";
 export type WebSearchMode = "disabled" | "cached" | "live";
+export type ReasoningEffort = "minimal" | "low" | "medium" | "high" | "xhigh";
 export type PromptKind = "start" | "verify" | "fix" | "finish";
 export type RunPhase = "start" | "verify" | "fix" | "finish";
 export type SessionPhase = RunPhase | "done" | "skipped";
@@ -58,6 +59,7 @@ export interface RuntimeConfig {
   taskLimit: number;
   maxCycles: number;
   timeoutSeconds: number;
+  reasoningEffort: ReasoningEffort;
   approvalPolicy: "never";
   sandboxMode: SandboxMode;
   verifySandboxMode: SandboxMode;

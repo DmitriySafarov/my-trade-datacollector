@@ -89,7 +89,7 @@ async function main(): Promise<void> {
   if (cli.preflightOnly) {
     console.log("\x1b[1mAutopilot Preflight\x1b[0m");
     console.log(
-      `  timeout=${config.timeoutSeconds}s  model=${config.model}  sandbox=${config.sandboxMode}  verify=${config.verifySandboxMode}  multi_agent=${config.multiAgent}  web_search=${config.webSearch}`,
+      `  timeout=${config.timeoutSeconds}s  model=${config.model}  reasoning=${config.reasoningEffort}  sandbox=${config.sandboxMode}  verify=${config.verifySandboxMode}  multi_agent=${config.multiAgent}  web_search=${config.webSearch}`,
     );
     for (const warning of config.warnings) {
       console.log(`  \x1b[33mwarning:\x1b[0m ${warning}`);
@@ -117,7 +117,7 @@ async function main(): Promise<void> {
 
   console.log(`\x1b[1mAutopilot\x1b[0m  ${sessionDir.split("/").pop()}`);
   console.log(
-    `  tasks=${config.taskLimit || "∞"}  cycles=${config.maxCycles}  timeout=${config.timeoutSeconds}s  model=${config.model}${resumePlan.phase ? `  phase=${resumePlan.phase}` : ""}${cli.resume ? `  resume=${cli.resume}` : ""}`,
+    `  tasks=${config.taskLimit || "∞"}  cycles=${config.maxCycles}  timeout=${config.timeoutSeconds}s  model=${config.model}  reasoning=${config.reasoningEffort}${resumePlan.phase ? `  phase=${resumePlan.phase}` : ""}${cli.resume ? `  resume=${cli.resume}` : ""}`,
   );
   console.log(
     `  sandbox=${config.sandboxMode}  verify=${config.verifySandboxMode}  multi_agent=${config.multiAgent}  web_search=${config.webSearch}`,

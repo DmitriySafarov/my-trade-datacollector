@@ -43,6 +43,7 @@ export async function callAgent(
   try {
     const threadOpts = {
       model: config.model,
+      modelReasoningEffort: config.reasoningEffort,
       workingDirectory: PROJECT_ROOT,
       approvalPolicy: config.approvalPolicy,
       sandboxMode: opts.sandboxMode ?? config.sandboxMode,

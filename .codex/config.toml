@@ -15,6 +15,7 @@ job_max_runtime_seconds = 1800
 # Source of truth for the local SDK runner. CLI flags may override these values.
 max_cycles = 10
 timeout_seconds = 1800
+reasoning_effort = "xhigh"
 sandbox_mode = "workspace-write"
 # Verify needs to write verify-*.md and verify-*-result.json into autopilot/sessions/.
 verify_sandbox_mode = "workspace-write"

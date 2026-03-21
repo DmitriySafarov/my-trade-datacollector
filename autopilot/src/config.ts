@@ -1,7 +1,7 @@
 import { existsSync, readFileSync } from "fs";
 import { join } from "path";
 
-import type { CliOverrides, RuntimeConfig, SandboxMode, WebSearchMode } from "./types.js";
+import type { CliOverrides, ReasoningEffort, RuntimeConfig, SandboxMode, WebSearchMode } from "./types.js";
 
 type TomlValue = boolean | number | string;
 type TomlTable = Record<string, TomlValue>;
@@ -80,6 +80,19 @@ function parseWebSearchMode(value: string | undefined, enabled: boolean): WebSea
   return enabled ? "cached" : "disabled";
 }
 
+function parseReasoningEffort(value: string | undefined): ReasoningEffort {
+  if (
+    value === "minimal"
+    || value === "low"
+    || value === "medium"
+    || value === "high"
+    || value === "xhigh"
+  ) {
+    return value;
+  }
+  return "medium";
+}
+
 function positiveNumber(value: number | undefined, fallback: number): number {
   return value && value > 0 ? value : fallback;
 }
@@ -130,6 +143,10 @@ export function loadRuntimeConfig(projectRoot: string, cli: CliOverrides): Runti
       ?? getNumber(autopilot, "timeout_seconds")
       ?? getNumber(agents, "job_max_runtime_seconds"),
       1800,
+    ),
+    reasoningEffort: parseReasoningEffort(
+      getString(autopilot, "reasoning_effort")
+      ?? getString(codex.root, "reasoning_effort"),
     ),
     approvalPolicy: "never",
     sandboxMode: parseSandboxMode(getString(autopilot, "sandbox_mode"), "workspace-write"),
