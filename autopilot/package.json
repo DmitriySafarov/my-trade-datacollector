@@ -1,0 +1,22 @@
+{
+  "name": "data-collector-autopilot",
+  "version": "1.0.0",
+  "type": "module",
+  "engines": {
+    "node": ">=18.0.0"
+  },
+  "scripts": {
+    "start": "tsx src/run.ts",
+    "dev": "tsx --watch src/run.ts",
+    "preflight": "tsx src/run.ts --preflight-only",
+    "typecheck": "tsc -p tsconfig.json --noEmit"
+  },
+  "dependencies": {
+    "@openai/codex-sdk": "^0.116.0"
+  },
+  "devDependencies": {
+    "tsx": "^4.0.0",
+    "typescript": "^5.5.0",
+    "@types/node": "^22.0.0"
+  }
+}

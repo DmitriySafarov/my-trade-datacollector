@@ -1,0 +1,11 @@
+.env
+__pycache__/
+*.pyc
+.pytest_cache/
+.venv/
+node_modules/
+dist/
+autopilot/sessions/
+.codex/sessions/
+data/
+*.egg-info/

@@ -1,0 +1,4 @@
+interface:
+  display_name: "Code Reviewer"
+  short_description: "Find bugs, regressions, and collector risks"
+  default_prompt: "Use $dc-code-reviewer to review the changed code and any adjacent execution paths needed for an honest review."

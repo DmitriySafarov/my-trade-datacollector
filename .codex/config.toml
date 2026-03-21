@@ -1,0 +1,25 @@
+# Codex configuration for Data Collector project
+
+model = "gpt-5.4"
+
+[features]
+multi_agent = true
+web_search = true
+
+[agents]
+max_threads = 6
+max_depth = 1
+job_max_runtime_seconds = 1800
+
+[autopilot]
+# Source of truth for the local SDK runner. CLI flags may override these values.
+max_cycles = 10
+timeout_seconds = 1800
+sandbox_mode = "workspace-write"
+# Verify needs to write verify-*.md and verify-*-result.json into autopilot/sessions/.
+verify_sandbox_mode = "workspace-write"
+push_enabled = false
+include_project_rules = true
+include_skill_guides = true
+include_agent_profiles = true
+web_search_mode = "cached"

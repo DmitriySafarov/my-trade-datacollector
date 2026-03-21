@@ -1,0 +1,4 @@
+interface:
+  display_name: "Write Tests"
+  short_description: "Write spec-driven collector and regression tests"
+  default_prompt: "Use $dc-write-tests to add or update the smallest correct test set for the changed collector behavior."

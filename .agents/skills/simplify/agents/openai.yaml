@@ -1,0 +1,4 @@
+interface:
+  display_name: "Simplify"
+  short_description: "Safely simplify changed code without regressions"
+  default_prompt: "Use $dc-simplify to make low-risk simplifications to the changed code without weakening reliability semantics."
