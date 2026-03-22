@@ -94,9 +94,12 @@ export function buildVerifyInstructions(config: RuntimeConfig): string {
   const reviewStep = config.multiAgent
     ? `
 ## Step 1: Expert review
-Launch relevant review agents sequentially when the capability is available.
+Launch relevant review agents in parallel when the capability is available.
 
 - Prefer \`python-async-pro\` plus domain agents relevant to the changed files
+- Spawn independent review agents together instead of one-by-one whenever their scopes do not overlap
+- While review agents are running, continue local lint, syntax, pytest, and code-path validation work immediately
+- Avoid waiting serially for each agent unless the next step is blocked on that exact result
 - Record which agents ran and what each one found
 - If required review-agent spawning is unavailable for the task, record a runtime contract failure and stop
 `.trim()
@@ -125,8 +128,10 @@ ${reviewStep}
 ## Step 4: Report
 - Write \`verify-*.md\` and \`verify-*-result.json\`
 - Report every critical, important, and suggestion finding
+- Mark a finding as \`blocking=true\` only when it threatens a reliable rollout: data loss/corruption, broken correctness, failed recovery, broken idempotency, broken shutdown, failing tests, or unsafe operations
+- Leave \`blocking=false\` for cleanup, maintainability, optional hardening, and non-critical follow-up ideas
 - Report failing tests and pre-existing bugs too
-- Set \`clean=true\` only if findings are empty and ruff, syntax, and tests all pass
+- Set \`clean=true\` if there are no blocking findings and ruff, syntax, and tests all pass
 `.trim();
 }
 
@@ -136,6 +141,7 @@ export function buildFixInstructions(): string {
 
 ## Step 1: Read the previous verify findings
 - Fix every critical and important finding
+- Prioritize all \`blocking=true\` findings first; those are the release gate
 - Fix suggestions unless they conflict with project conventions
 - Fix failing tests even if they were pre-existing
 

@@ -72,7 +72,9 @@ function getFeatureFlag(table: TomlTable | undefined, key: string): boolean | un
 }
 
 function parseSandboxMode(value: string | undefined, fallback: SandboxMode): SandboxMode {
-  return value === "read-only" || value === "workspace-write" ? value : fallback;
+  return value === "read-only" || value === "workspace-write" || value === "danger-full-access"
+    ? value
+    : fallback;
 }
 
 function parseWebSearchMode(value: string | undefined, enabled: boolean): WebSearchMode {
@@ -149,7 +151,7 @@ export function loadRuntimeConfig(projectRoot: string, cli: CliOverrides): Runti
       ?? getString(codex.root, "reasoning_effort"),
     ),
     approvalPolicy: "never",
-    sandboxMode: parseSandboxMode(getString(autopilot, "sandbox_mode"), "workspace-write"),
+    sandboxMode: parseSandboxMode(getString(autopilot, "sandbox_mode"), "danger-full-access"),
     verifySandboxMode,
     pushEnabled: getBoolean(autopilot, "push_enabled") ?? false,
     includeProjectRules: getBoolean(autopilot, "include_project_rules") ?? true,

@@ -1,5 +1,5 @@
 export type Severity = "critical" | "important" | "suggestion";
-export type SandboxMode = "read-only" | "workspace-write";
+export type SandboxMode = "read-only" | "workspace-write" | "danger-full-access";
 export type WebSearchMode = "disabled" | "cached" | "live";
 export type ReasoningEffort = "minimal" | "low" | "medium" | "high" | "xhigh";
 export type PromptKind = "start" | "verify" | "fix" | "finish";
@@ -10,6 +10,7 @@ export type AgentRunStatus = "completed" | "dry_run" | "timed_out" | "failed";
 export interface Finding {
   id: string;
   severity: Severity;
+  blocking?: boolean;
   source?: string;
   file: string;
   line?: number;
@@ -29,6 +30,11 @@ export interface VerifyResult {
   tests_total?: number;
   tests_failed?: number;
   findings: Finding[];
+}
+
+export interface VerifyGateEvaluation {
+  clean: boolean;
+  invalidReason?: string;
 }
 
 export interface SessionState {

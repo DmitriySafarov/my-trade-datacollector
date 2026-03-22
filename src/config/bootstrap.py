@@ -4,6 +4,13 @@ import os
 from dataclasses import dataclass
 
 
+def _get_bool(name: str, default: bool) -> bool:
+    value = os.getenv(name)
+    if value is None:
+        return default
+    return value.lower() in {"1", "true", "yes", "on"}
+
+
 def _get_int(name: str, default: int) -> int:
     value = os.getenv(name)
     return int(value) if value is not None else default
@@ -31,11 +38,13 @@ class BootstrapConfig:
     settings_refresh_seconds: int
     default_batch_count: int
     default_batch_seconds: float
+    collector_startup_timeout_seconds: float
     shutdown_timeout_seconds: int
     finnhub_api_key: str | None
     fred_api_key: str | None
     binance_rest_base_url: str
     hyperliquid_api_url: str
+    allow_non_transactional_migrations: bool = False
 
 
 def load_bootstrap_config() -> BootstrapConfig:
@@ -55,6 +64,10 @@ def load_bootstrap_config() -> BootstrapConfig:
         settings_refresh_seconds=_get_int("COLLECTOR_SETTINGS_REFRESH_SECONDS", 30),
         default_batch_count=_get_int("COLLECTOR_DEFAULT_BATCH_COUNT", 500),
         default_batch_seconds=_get_float("COLLECTOR_DEFAULT_BATCH_SECONDS", 2.0),
+        collector_startup_timeout_seconds=_get_float(
+            "COLLECTOR_STARTUP_TIMEOUT_SECONDS",
+            15.0,
+        ),
         shutdown_timeout_seconds=_get_int("COLLECTOR_SHUTDOWN_TIMEOUT_SECONDS", 15),
         finnhub_api_key=os.getenv("FINNHUB_API_KEY") or None,
         fred_api_key=os.getenv("FRED_API_KEY") or None,
@@ -65,5 +78,9 @@ def load_bootstrap_config() -> BootstrapConfig:
         hyperliquid_api_url=os.getenv(
             "HYPERLIQUID_API_URL",
             "https://api.hyperliquid.xyz",
+        ),
+        allow_non_transactional_migrations=_get_bool(
+            "COLLECTOR_ALLOW_NON_TRANSACTIONAL_MIGRATIONS",
+            False,
         ),
     )

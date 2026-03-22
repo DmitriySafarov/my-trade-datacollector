@@ -1,6 +1,7 @@
 from __future__ import annotations
 
-from datetime import datetime
+import json
+from datetime import datetime, timezone
 from typing import Any
 
 import asyncpg
@@ -16,6 +17,7 @@ class HealthMonitor:
         event_at: datetime,
         details: dict[str, Any] | None = None,
     ) -> None:
+        event_at = _normalize_event_at(event_at)
         async with self.pool.acquire() as connection:
             await connection.execute(
                 """
@@ -26,17 +28,43 @@ class HealthMonitor:
                     details,
                     updated_at
                 )
-                VALUES ($1, $2, timezone('utc', now()), $3, timezone('utc', now()))
+                VALUES ($1, $2, CURRENT_TIMESTAMP, $3::jsonb, CURRENT_TIMESTAMP)
                 ON CONFLICT (source) DO UPDATE
                 SET
-                    last_event_at = EXCLUDED.last_event_at,
-                    last_success_at = EXCLUDED.last_success_at,
-                    details = EXCLUDED.details,
-                    updated_at = EXCLUDED.updated_at
+                    last_event_at = COALESCE(
+                        GREATEST(
+                            source_watermarks.last_event_at,
+                            EXCLUDED.last_event_at
+                        ),
+                        source_watermarks.last_event_at,
+                        EXCLUDED.last_event_at
+                    ),
+                    last_success_at = CASE
+                        WHEN source_watermarks.last_success_at IS NULL
+                            THEN CURRENT_TIMESTAMP
+                        ELSE GREATEST(
+                            source_watermarks.last_success_at,
+                            CURRENT_TIMESTAMP
+                        )
+                    END,
+                    details = CASE
+                        WHEN source_watermarks.last_event_at IS NULL THEN EXCLUDED.details
+                        WHEN EXCLUDED.last_event_at > source_watermarks.last_event_at
+                            THEN EXCLUDED.details
+                        ELSE source_watermarks.details
+                    END,
+                    updated_at = CASE
+                        WHEN source_watermarks.updated_at IS NULL
+                            THEN CURRENT_TIMESTAMP
+                        ELSE GREATEST(
+                            source_watermarks.updated_at,
+                            CURRENT_TIMESTAMP
+                        )
+                    END
                 """,
                 source,
                 event_at,
-                details or {},
+                json.dumps(details or {}),
             )
 
     async def snapshot(self) -> list[dict[str, Any]]:
@@ -48,4 +76,17 @@ class HealthMonitor:
                 ORDER BY source
                 """,
             )
-        return [dict(row) for row in rows]
+
+        snapshots: list[dict[str, Any]] = []
+        for row in rows:
+            row_dict = dict(row)
+            if isinstance(row_dict["details"], str):
+                row_dict["details"] = json.loads(row_dict["details"])
+            snapshots.append(row_dict)
+        return snapshots
+
+
+def _normalize_event_at(event_at: datetime) -> datetime:
+    if event_at.tzinfo is None or event_at.utcoffset() is None:
+        raise ValueError("event_at must be timezone-aware")
+    return event_at.astimezone(timezone.utc)

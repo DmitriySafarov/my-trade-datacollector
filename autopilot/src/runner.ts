@@ -1,10 +1,10 @@
 import { Codex } from "@openai/codex-sdk";
 
-import { callAgent } from "./agent.js";
+import { runPhaseWithRetry } from "./phase-runner.js";
 import {
   createTaskDir,
+  evaluateVerifyGate,
   hasNoActionableTasks,
-  isVerifyClean,
   readTaskLabel,
   saveState,
 } from "./session.js";
@@ -40,12 +40,18 @@ export async function runTask(
   if (!resumePhase || resumePhase === "start") {
     console.log("\n\x1b[1;34m▸ IMPLEMENT\x1b[0m");
     saveState(sessionDir, { current_task: taskNum, phase: "start", cycle: undefined, last_runtime_error: null });
-    const startResult = await callAgent(
+    const startResult = await runPhaseWithRetry(
       codex,
       buildStartPrompt(taskDir, config),
       config,
       runner,
-      { taskDir, phaseName: "start", threadId: implThreadId ?? undefined },
+      {
+        taskDir,
+        phaseName: "start",
+        label: "IMPLEMENT",
+        threadId: implThreadId ?? undefined,
+        artifactsToReset: ["context.md", "start.md"],
+      },
     );
     assertPhaseCompleted(startResult, sessionDir, taskNum, "start", "IMPLEMENT", undefined, implThreadId);
     implThreadId = startResult.threadId ?? implThreadId;
@@ -86,12 +92,18 @@ export async function runTask(
       if (!resumeIntoFix) {
         console.log(`\n\x1b[1;35m▸ VERIFY (${cycle}/${config.maxCycles})\x1b[0m`);
         saveState(sessionDir, { current_task: taskNum, phase: "verify", cycle, impl_thread_id: implThreadId, last_runtime_error: null });
-        const verifyResult = await callAgent(
+        const verifyResult = await runPhaseWithRetry(
           codex,
           buildVerifyPrompt(taskDir, cycle, config),
           config,
           runner,
-          { taskDir, phaseName: `verify-${cycle}`, sandboxMode: config.verifySandboxMode },
+          {
+            taskDir,
+            phaseName: `verify-${cycle}`,
+            label: `VERIFY (${cycle})`,
+            sandboxMode: config.verifySandboxMode,
+            artifactsToReset: [`verify-${cycle}.md`, `verify-${cycle}-result.json`],
+          },
         );
         assertPhaseCompleted(verifyResult, sessionDir, taskNum, "verify", `VERIFY (${cycle})`, cycle, implThreadId);
         assertArtifacts(
@@ -112,11 +124,14 @@ export async function runTask(
           break;
         }
 
-        const result = isVerifyClean(taskDir, cycle);
-        if (result === null) {
+        const gate = evaluateVerifyGate(taskDir, cycle);
+        if (gate === null) {
           failTask(sessionDir, taskNum, "verify", `VERIFY (${cycle}) produced an unreadable result file`, cycle, implThreadId);
         }
-        if (result) {
+        if (gate.invalidReason) {
+          failTask(sessionDir, taskNum, "verify", `VERIFY (${cycle}) produced an invalid gate result: ${gate.invalidReason}`, cycle, implThreadId);
+        }
+        if (gate.clean) {
           console.log(`  \x1b[1;32m✓ CLEAN\x1b[0m on cycle ${cycle}`);
           clean = true;
           break;
@@ -130,12 +145,18 @@ export async function runTask(
 
       console.log(`\n\x1b[1;34m▸ FIX (${cycle})\x1b[0m`);
       saveState(sessionDir, { current_task: taskNum, phase: "fix", cycle, impl_thread_id: implThreadId, last_runtime_error: null });
-      const fixResult = await callAgent(
+      const fixResult = await runPhaseWithRetry(
         codex,
         buildFixPrompt(taskDir, cycle, config),
         config,
         runner,
-        { taskDir, phaseName: `implement-${cycle}`, threadId: implThreadId ?? undefined },
+        {
+          taskDir,
+          phaseName: `implement-${cycle}`,
+          label: `FIX (${cycle})`,
+          threadId: implThreadId ?? undefined,
+          artifactsToReset: [`implement-${cycle}.md`],
+        },
       );
       assertPhaseCompleted(fixResult, sessionDir, taskNum, "fix", `FIX (${cycle})`, cycle, implThreadId);
       implThreadId = fixResult.threadId ?? implThreadId;
@@ -152,12 +173,18 @@ export async function runTask(
   if (!shutdownRequested()) {
     console.log("\n\x1b[1;32m▸ FINISH\x1b[0m");
     saveState(sessionDir, { current_task: taskNum, phase: "finish", impl_thread_id: implThreadId, last_runtime_error: null });
-    const finishResult = await callAgent(
+    const finishResult = await runPhaseWithRetry(
       codex,
       buildFinishPrompt(taskDir, config),
       config,
       runner,
-      { taskDir, phaseName: "finish", threadId: implThreadId ?? undefined },
+      {
+        taskDir,
+        phaseName: "finish",
+        label: "FINISH",
+        threadId: implThreadId ?? undefined,
+        artifactsToReset: ["finish.md"],
+      },
     );
     assertPhaseCompleted(finishResult, sessionDir, taskNum, "finish", "FINISH", undefined, implThreadId);
     assertArtifacts(taskDir, sessionDir, taskNum, "finish", "FINISH", ["finish.md"], runner, undefined, implThreadId);

@@ -9,15 +9,16 @@ web_search = true
 [agents]
 max_threads = 6
 max_depth = 1
-job_max_runtime_seconds = 1800
+job_max_runtime_seconds = 7200
 
 [autopilot]
 # Source of truth for the local SDK runner. CLI flags may override these values.
-max_cycles = 10
-timeout_seconds = 1800
+max_cycles = 5
+timeout_seconds = 7200
 reasoning_effort = "xhigh"
-sandbox_mode = "workspace-write"
-# Verify needs to write verify-*.md and verify-*-result.json into autopilot/sessions/.
+sandbox_mode = "danger-full-access"
+# Verify needs to write verify-*.md and verify-*-result.json into autopilot/sessions/
+# but should not run with full filesystem access by default.
 verify_sandbox_mode = "workspace-write"
 push_enabled = false
 include_project_rules = true

@@ -3,7 +3,7 @@ import { existsSync, mkdirSync, readFileSync, readdirSync, writeFileSync } from 
 import { join } from "path";
 
 import { AUTOPILOT_ROOT } from "./paths.js";
-import type { SessionState, VerifyResult } from "./types.js";
+import type { Finding, SessionState, VerifyGateEvaluation, VerifyResult } from "./types.js";
 
 export function createSessionDir(): string {
   const now = new Date();
@@ -63,7 +63,8 @@ export function readVerifyFindings(taskDir: string, attempt: number): string {
     if (!data.findings.length) return "";
     const lines = ["# Findings From Verify", ""];
     for (const finding of data.findings) {
-      lines.push(`### [${finding.severity}] ${finding.id}: ${finding.title}`);
+      const blockerTag = finding.blocking ? " blocker" : "";
+      lines.push(`### [${finding.severity}${blockerTag}] ${finding.id}: ${finding.title}`);
       lines.push(`**File:** ${finding.file}:${finding.line ?? "?"}`);
       lines.push(`**Description:** ${finding.description}`);
       lines.push(`**Fix:** ${finding.recommended_fix}`);
@@ -75,19 +76,39 @@ export function readVerifyFindings(taskDir: string, attempt: number): string {
   }
 }
 
-export function isVerifyClean(taskDir: string, attempt: number): boolean | null {
+function isBlockingFinding(finding: Finding): boolean {
+  return finding.severity === "critical" || finding.blocking === true;
+}
+
+function countSeverity(findings: Finding[], severity: Finding["severity"]): number {
+  return findings.filter((finding) => finding.severity === severity).length;
+}
+
+export function evaluateVerifyGate(taskDir: string, attempt: number): VerifyGateEvaluation | null {
   const path = join(taskDir, `verify-${attempt}-result.json`);
   if (!existsSync(path)) return null;
 
   try {
     const result = JSON.parse(readFileSync(path, "utf-8")) as VerifyResult;
-    if (result.clean) return true;
-    return (
-      result.findings.length === 0
-      && result.ruff_passed
-      && result.syntax_passed
-      && result.tests_passed
-    );
+    if (result.critical !== countSeverity(result.findings, "critical")) {
+      return { clean: false, invalidReason: "critical count does not match findings array" };
+    }
+    if (result.important !== countSeverity(result.findings, "important")) {
+      return { clean: false, invalidReason: "important count does not match findings array" };
+    }
+    if (result.suggestion !== countSeverity(result.findings, "suggestion")) {
+      return { clean: false, invalidReason: "suggestion count does not match findings array" };
+    }
+    if (result.findings.some((finding) => finding.severity === "critical" && finding.blocking === false)) {
+      return { clean: false, invalidReason: "critical findings cannot be marked blocking=false" };
+    }
+
+    const hasBlockingFindings = result.findings.some(isBlockingFinding);
+    const gatePasses = !hasBlockingFindings && result.ruff_passed && result.syntax_passed && result.tests_passed;
+    if (result.clean && !gatePasses) {
+      return { clean: false, invalidReason: "clean=true contradicts blocking findings or failed checks" };
+    }
+    return { clean: gatePasses };
   } catch {
     return null;
   }

@@ -16,5 +16,9 @@ class BaseCollector(ABC):
         raise NotImplementedError
 
     @abstractmethod
+    async def wait_ready(self) -> None:
+        raise NotImplementedError
+
+    @abstractmethod
     def health_snapshot(self) -> dict[str, object]:
         raise NotImplementedError

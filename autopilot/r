@@ -1,0 +1,18 @@
+
+> data-collector-autopilot@1.0.0 start
+> tsx src/run.ts --resume 2026-03-22_02-25-58_6a5e0e40
+
+[1mAutopilot[0m  2026-03-22_02-25-58_6a5e0e40
+  tasks=∞  cycles=10  timeout=7200s  model=gpt-5.4  reasoning=xhigh  phase=verify  resume=2026-03-22_02-25-58_6a5e0e40
+  sandbox=danger-full-access  verify=workspace-write  multi_agent=true  web_search=true
+  project_skills=dc-write-tests, dc-code-reviewer, dc-simplify
+  project_agents=data-engineer, python-async-pro, timescaledb-pro, ws-specialist, api-integrator
+  Ctrl+C to stop gracefully
+
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+Task 1
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  [2mTask Context[0m
+
+[1;35m▸ VERIFY (7/10)[0m

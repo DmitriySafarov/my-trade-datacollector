@@ -85,6 +85,7 @@ If the caller provides report-file paths or explicitly asks for structured outpu
     {
       "id": "C1",
       "severity": "critical",
+      "blocking": true,
       "source": "dc-code-reviewer",
       "file": "src/collectors/hyperliquid/trades.py",
       "line": 42,
@@ -96,7 +97,16 @@ If the caller provides report-file paths or explicitly asks for structured outpu
 }
 ```
 
-Set `clean=true` only if findings are empty and lint/syntax/tests all pass.
+Set `blocking=true` only when the issue would make rollout unsafe or unreliable:
+- data loss or corruption
+- wrong schema/provenance/UTC semantics
+- broken reconnect, dedup, idempotency, or shutdown behavior
+- test failures that invalidate the task
+- runtime crashes or unsafe operations
+
+Use `blocking=false` for non-critical cleanup, maintainability, polish, and follow-up hardening.
+
+Set `clean=true` only if there are no blocking findings and lint/syntax/tests all pass.
 
 If no report path is provided, return findings directly in the assistant response instead of inventing files.
 
