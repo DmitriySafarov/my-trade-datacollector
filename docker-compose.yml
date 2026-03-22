@@ -20,6 +20,7 @@ services:
       start_period: 10s
     volumes:
       - postgres-data:/var/lib/postgresql/data
+      - ${POSTGRES_SOCKET_DIR:-./.docker/postgres-socket}:/var/run/postgresql
     restart: unless-stopped
 
   collector:

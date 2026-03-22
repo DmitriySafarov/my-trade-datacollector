@@ -4,18 +4,13 @@ from datetime import timedelta
 
 import pytest
 
-from ._bronze_expectations import (
-    EXPECTED_NEW_MIGRATIONS,
-    EXPECTED_TABLES,
-)
+from ._bronze_expectations import EXPECTED_BRONZE_TABLES, EXPECTED_NEW_MIGRATIONS
 
 
 @pytest.mark.asyncio
 async def test_bronze_tables_are_migrated_as_hypertables(
     migrated_db: dict[str, object],
 ) -> None:
-    expected_policies = {table: timedelta(hours=48) for table in EXPECTED_TABLES}
-    expected_policies["s3_l2book"] = timedelta(days=45)
     pool = migrated_db["pool"]
     applied = set(migrated_db["applied"])
     assert EXPECTED_NEW_MIGRATIONS.issubset(applied)
@@ -27,6 +22,23 @@ async def test_bronze_tables_are_migrated_as_hypertables(
         )
         assert extension == "timescaledb"
 
+        registry_rows = await connection.fetch(
+            """
+            SELECT table_name
+            FROM bronze_table_registry
+            WHERE table_schema = 'public'
+            """,
+        )
+        helper_rows = await connection.fetch(
+            "SELECT unnest(bronze_table_names()) AS table_name",
+        )
+        public_hypertable_rows = await connection.fetch(
+            """
+            SELECT hypertable_name
+            FROM timescaledb_information.hypertables
+            WHERE hypertable_schema = 'public'
+            """,
+        )
         hypertable_rows = await connection.fetch(
             """
             SELECT hypertable_name, compression_enabled
@@ -34,7 +46,7 @@ async def test_bronze_tables_are_migrated_as_hypertables(
             WHERE hypertable_schema = 'public'
               AND hypertable_name = ANY($1::text[])
             """,
-            list(EXPECTED_TABLES),
+            list(EXPECTED_BRONZE_TABLES),
         )
         column_rows = await connection.fetch(
             """
@@ -44,7 +56,7 @@ async def test_bronze_tables_are_migrated_as_hypertables(
               AND table_name = ANY($1::text[])
               AND column_name = ANY($2::text[])
             """,
-            list(EXPECTED_TABLES),
+            list(EXPECTED_BRONZE_TABLES),
             ["time", "source", "payload"],
         )
         policy_rows = await connection.fetch(
@@ -55,7 +67,7 @@ async def test_bronze_tables_are_migrated_as_hypertables(
               AND hypertable_name = ANY($1::text[])
               AND proc_name LIKE 'policy_compression%'
             """,
-            list(EXPECTED_TABLES),
+            list(EXPECTED_BRONZE_TABLES),
         )
         dimension_rows = await connection.fetch(
             """
@@ -65,10 +77,15 @@ async def test_bronze_tables_are_migrated_as_hypertables(
               AND hypertable_name = ANY($1::text[])
               AND column_name = 'time'
             """,
-            list(EXPECTED_TABLES),
+            list(EXPECTED_BRONZE_TABLES),
         )
 
+    expected_policies = {table: timedelta(hours=48) for table in EXPECTED_BRONZE_TABLES}
+    expected_policies["s3_l2book"] = timedelta(days=45)
+    registry_tables = {row["table_name"] for row in registry_rows}
+    helper_tables = {row["table_name"] for row in helper_rows}
     hypertables = {row["hypertable_name"] for row in hypertable_rows}
+    public_hypertables = {row["hypertable_name"] for row in public_hypertable_rows}
     compression = {
         row["hypertable_name"]: row["compression_enabled"] for row in hypertable_rows
     }
@@ -81,10 +98,13 @@ async def test_bronze_tables_are_migrated_as_hypertables(
         row["hypertable_name"]: row["time_interval"] for row in dimension_rows
     }
 
-    assert EXPECTED_TABLES.issubset(hypertables)
-    assert EXPECTED_TABLES.issubset(policies)
-    assert EXPECTED_TABLES.issubset(chunk_intervals)
-    for table in EXPECTED_TABLES:
+    assert registry_tables == EXPECTED_BRONZE_TABLES
+    assert helper_tables == EXPECTED_BRONZE_TABLES
+    assert EXPECTED_BRONZE_TABLES.issubset(public_hypertables)
+    assert EXPECTED_BRONZE_TABLES == hypertables
+    assert EXPECTED_BRONZE_TABLES == set(policies)
+    assert EXPECTED_BRONZE_TABLES == set(chunk_intervals)
+    for table in EXPECTED_BRONZE_TABLES:
         assert compression[table] is True
         assert policies[table] == expected_policies[table]
         assert columns[(table, "time")] == ("timestamp with time zone", "NO")
