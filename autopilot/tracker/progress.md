@@ -28,3 +28,11 @@
 - Issues: the task required five implementation/verify loops to reconcile replay-repair edge cases, Bronze news dedup semantics, and migration-upgrade coverage, but the final repo-wide validation is clean.
 - Validation: `./.venv/bin/ruff check .`, `./.venv/bin/ruff format --check .`, and `./.venv/bin/python -m pytest tests/ -v` all passed with `115 passed`.
 - Next step: start `P0.5` TimescaleDB compression policies now that Silver views are stable and fully covered by DB-backed tests.
+
+- Completed `P1.1` by adding the Hyperliquid websocket transport stack in `src/collectors/hyperliquid/` with reconnect supervision, bounded open timeout, jittered backoff, generation-safe callback routing, bounded shutdown drain, and session wrapping around `hyperliquid.websocket_manager.WebsocketManager`.
+- Added focused Hyperliquid regression coverage in `tests/collectors/hyperliquid/` for reconnect delivery, open-timeout recovery, overflow-triggered reconnect, silent session exits, shutdown drain behavior, and SDK adapter hooks.
+- Tracker correction: marked stale `P0.5` complete because the existing migration chain and real DB-backed schema tests already prove compression policies are configured.
+- Decisions: use the lower-level SDK websocket manager directly instead of `hyperliquid.info.Info`; preserve already-received callbacks across reconnect/shutdown races; treat queue overflow as a connection-level reconnect trigger instead of blocking the single SDK callback thread.
+- Issues: the task needed five verify/repair loops to close reconnect, shutdown, timeout, overflow, and late-callback races; silent half-open detection remains deferred to the later reliability phase.
+- Validation: `./.venv/bin/ruff check .`, `./.venv/bin/ruff format --check .`, and `./.venv/bin/python -m pytest tests/ -v` all passed with `137 passed`.
+- Next step: start `P1.2` Hyperliquid trades collector on top of the now-stable WS manager.
