@@ -44,3 +44,12 @@
 - Issues: this task required five verify/repair loops to reconcile timer-flush cancellation, shutdown/reconnect semantics, parser range safety, DB guardrails, and realistic cleanup-timeout test coverage.
 - Validation: `./.venv/bin/python -m ruff check .`, `./.venv/bin/python -m ruff format --check .`, and `./.venv/bin/python -m pytest tests/ -v` all passed with `171 passed`.
 - Next step: start `P1.3` Hyperliquid L2Book collector on top of the now-hardened WS manager and replay-guard path.
+
+- Completed `P1.3` by wiring the Hyperliquid ETH/BTC L2Book collector into the shared market websocket runtime and landing Bronze writes into `hl_l2book` with replay-safe storage, Decimal-based parsing, and runtime collector registration.
+- Hardened the shared Hyperliquid lifecycle around the new collector with restart-safe run coordination, stale-callback fencing, shutdown intake barriers, bounded writer close/abort behavior, preserved disconnect diagnostics, and source-aware health snapshots across `src/collectors/hyperliquid/`, `src/db/batch_writer.py`, and the related test harness helpers.
+- Added repair and guard migrations `0033`, `0034`, and `0035` so blank replay keys, invalid Hyperliquid trade values, and non-finite or zeroed Hyperliquid L2Book doubles are filtered out of registry rebuilds and Silver reads without mutating Bronze history.
+- Expanded DB-backed and collector regression coverage across `tests/collectors/hyperliquid/`, `tests/db/`, `tests/test_batch_writer.py`, `tests/test_db_test_support.py`, and `tests/test_runtime_collectors.py`, including restart/stop races, reconnect diagnostics, blank-hash reconciliation, HL trade contracts, and L2Book overflow/underflow cases.
+- Decisions: keep trades and L2Book on one Hyperliquid websocket manager; keep reconnect gap timestamps connection-scoped while leaving per-source freshness in `source_health`; compute L2Book derived values in `Decimal` space and only materialize checked floats at the final boundary.
+- Issues: the task required five implementation/verify loops to close WS lifecycle races, shutdown hangs, replay/Silver repair leaks, DB bootstrap harness behavior, and numeric edge cases in both parser and DB guards.
+- Validation: `./.venv/bin/ruff check .`, `./.venv/bin/ruff format --check .`, and `./.venv/bin/python -m pytest tests/ -v` all passed with `245 passed in 159.50s`.
+- Next step: start `P1.4` Hyperliquid `activeAssetCtx` collection on top of the now-stable shared market websocket path.
