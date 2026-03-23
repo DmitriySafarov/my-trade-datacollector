@@ -115,6 +115,65 @@ async def test_ensure_postgres_service_propagates_post_bootstrap_error(
 
 
 @pytest.mark.asyncio
+async def test_ensure_postgres_service_skips_compose_for_explicit_host_override(
+    monkeypatch: pytest.MonkeyPatch,
+    reloaded_db_test_support,
+) -> None:
+    monkeypatch.setenv("TEST_DB_HOST", "postgres")
+    support = reloaded_db_test_support()
+    events: list[tuple[str, object]] = []
+
+    async def fake_wait(
+        database: str,
+        *,
+        timeout: float = 60.0,
+        allow_missing_database: bool = False,
+    ) -> None:
+        del allow_missing_database
+        events.append(("wait", (database, timeout)))
+
+    async def fake_exec(*args, **kwargs):
+        del args, kwargs
+        raise AssertionError("docker compose should not run with explicit TEST_DB_HOST")
+
+    monkeypatch.setattr(support, "_wait_for_database", fake_wait)
+    monkeypatch.setattr(support.asyncio, "create_subprocess_exec", fake_exec)
+
+    await support._ensure_postgres_service()
+
+    assert events == [("wait", ("postgres", 60.0))]
+
+
+@pytest.mark.asyncio
+async def test_ensure_postgres_service_surfaces_external_fallback_on_docker_permission_error(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path,
+    reloaded_db_test_support,
+) -> None:
+    support = reloaded_db_test_support()
+    monkeypatch.setattr(support, "TEST_DB_SOCKET_DIR", tmp_path / "postgres-socket")
+
+    async def fake_exec(*args, **kwargs):
+        del args, kwargs
+
+        class _Process:
+            returncode = 1
+
+            async def communicate(self) -> tuple[bytes, bytes]:
+                return (
+                    b"",
+                    b"permission denied while trying to connect to the Docker daemon socket at unix:///Users/test/.docker/run/docker.sock: connect: operation not permitted",
+                )
+
+        return _Process()
+
+    monkeypatch.setattr(support.asyncio, "create_subprocess_exec", fake_exec)
+
+    with pytest.raises(RuntimeError, match="TEST_DB_BOOTSTRAP=external"):
+        await support._ensure_postgres_service()
+
+
+@pytest.mark.asyncio
 async def test_migrated_db_returns_reusable_selected_transport(
     migrated_db: dict[str, object],
 ) -> None:

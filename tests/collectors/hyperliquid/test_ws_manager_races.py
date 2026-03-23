@@ -58,6 +58,7 @@ async def test_manager_preserves_received_messages_during_reconnect(
     second = await asyncio.wait_for(factory.next_session(), timeout=1.0)
     second.open()
     await manager.wait_ready()
+    assert manager.health_snapshot()["last_disconnect_reason"] == "network_drop"
 
     await manager.stop()
     await asyncio.wait_for(task, timeout=1.0)
@@ -94,6 +95,7 @@ async def test_manager_clears_ready_after_silent_session_exit() -> None:
     second = await asyncio.wait_for(factory.next_session(), timeout=1.0)
     second.open()
     await manager.wait_ready()
+    assert manager.health_snapshot()["last_disconnect_reason"] == "session_exited"
 
     await manager.stop()
     await asyncio.wait_for(task, timeout=1.0)

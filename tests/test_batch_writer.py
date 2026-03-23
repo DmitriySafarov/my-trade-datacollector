@@ -4,6 +4,7 @@ import asyncio
 
 import pytest
 
+from src.collectors.hyperliquid.lifecycle_support import close_writers
 from src.db.batch_writer import BatchWriter
 
 
@@ -127,5 +128,40 @@ async def test_cancelling_waiter_does_not_cancel_shared_flush_task() -> None:
     await asyncio.wait_for(finished.wait(), timeout=1.0)
     await writer.close()
 
+    assert payloads == [["trade-1"]]
+    assert writer.failure is None
+
+
+@pytest.mark.asyncio
+async def test_close_writers_keeps_inflight_flush_alive_when_caller_times_out() -> None:
+    started = asyncio.Event()
+    release = asyncio.Event()
+    finished = asyncio.Event()
+    payloads: list[list[str]] = []
+
+    async def flush_callback(payload: list[str]) -> None:
+        payloads.append(payload)
+        started.set()
+        await release.wait()
+        finished.set()
+
+    writer = BatchWriter(
+        name="graceful-close",
+        count_limit=1,
+        time_limit_seconds=60.0,
+        flush_callback=flush_callback,
+    )
+    add_task = asyncio.create_task(writer.add("trade-1"))
+
+    await asyncio.wait_for(started.wait(), timeout=1.0)
+    close_task = asyncio.create_task(close_writers([writer]))
+
+    with pytest.raises(asyncio.TimeoutError):
+        await asyncio.wait_for(asyncio.shield(close_task), timeout=0.01)
+
+    release.set()
+    await asyncio.wait_for(finished.wait(), timeout=1.0)
+    assert await close_task is None
+    await asyncio.wait_for(add_task, timeout=1.0)
     assert payloads == [["trade-1"]]
     assert writer.failure is None

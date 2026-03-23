@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import asyncio
+import threading
 from collections.abc import Callable, Sequence
 
 from hyperliquid.websocket_manager import subscription_to_identifier
@@ -12,6 +13,34 @@ class HyperliquidWsNotReadyError(RuntimeError):
     """Raised when the manager stops before the first ready signal."""
 
 
+class BoundedMessageSlots:
+    def __init__(self, keys: Sequence[str], limit: int) -> None:
+        self._counts = {key: 0 for key in keys}
+        self._limit = limit
+        self._lock = threading.Lock()
+
+    def try_reserve(self, key: str) -> bool:
+        with self._lock:
+            if self._counts[key] >= self._limit:
+                return False
+            self._counts[key] += 1
+            return True
+
+    def release(self, key: str) -> None:
+        with self._lock:
+            if self._counts[key] > 0:
+                self._counts[key] -= 1
+
+    def is_empty(self) -> bool:
+        with self._lock:
+            return all(count == 0 for count in self._counts.values())
+
+    def reset(self) -> None:
+        with self._lock:
+            for key in self._counts:
+                self._counts[key] = 0
+
+
 def build_health_snapshot(
     *,
     state: str,
@@ -20,8 +49,14 @@ def build_health_snapshot(
     last_disconnect_reason: str | None,
     last_error: str | None,
     last_message_at: str | None,
+    current_gap_started_at: str | None,
+    last_gap_started_at: str | None,
+    last_gap_ended_at: str | None,
+    last_gap_duration_seconds: float | None,
     subscriptions: dict[str, HyperliquidWsSubscription],
     queues: dict[str, asyncio.Queue[object]],
+    subscription_health: dict[str, dict[str, object]],
+    source_health: dict[str, dict[str, object]],
 ) -> dict[str, object]:
     return {
         "state": state,
@@ -32,7 +67,14 @@ def build_health_snapshot(
         "last_disconnect_reason": last_disconnect_reason,
         "last_error": last_error,
         "last_message_at": last_message_at,
+        "current_gap_started_at": current_gap_started_at,
+        "last_gap_started_at": last_gap_started_at,
+        "last_gap_ended_at": last_gap_ended_at,
+        "last_gap_duration_seconds": last_gap_duration_seconds,
         "queue_sizes": {key: queues[key].qsize() for key in subscriptions},
+        "subscription_health": subscription_health,
+        "source_health": source_health,
+        "sources": source_health,
     }
 
 
@@ -54,9 +96,14 @@ def schedule_threadsafe(
     loop: asyncio.AbstractEventLoop | None,
     callback: Callable[..., None],
     *args: object,
-) -> None:
-    if loop is not None and not loop.is_closed():
+) -> bool:
+    if loop is None or loop.is_closed():
+        return False
+    try:
         loop.call_soon_threadsafe(callback, *args)
+    except RuntimeError:
+        return False
+    return True
 
 
 async def wait_for_ready_or_terminal(
@@ -85,6 +132,7 @@ def build_wait_ready_error(failure: BaseException | None) -> BaseException:
 async def drain_queues(
     queues: dict[str, asyncio.Queue[object]],
     has_failure: Callable[[], bool],
+    has_pending: Callable[[], bool] | None = None,
     timeout: float | None = None,
 ) -> bool:
     async def wait_for_queues() -> bool:
@@ -92,7 +140,9 @@ async def drain_queues(
         try:
             while not has_failure():
                 done, _ = await asyncio.wait(joins, timeout=0.1)
-                if len(done) == len(joins):
+                if len(done) == len(joins) and not (
+                    has_pending is not None and has_pending()
+                ):
                     return True
         finally:
             for task in joins:

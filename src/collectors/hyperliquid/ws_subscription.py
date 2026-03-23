@@ -14,3 +14,4 @@ class HyperliquidWsSubscription:
     name: str
     subscription: Subscription
     handler: MessageHandler
+    source_id: str | None = None

@@ -53,6 +53,81 @@ INVALID_HL_TRADES = [
     """
     INSERT INTO hl_trades (time, source, coin, side, price, size, hash, tid, users, payload)
     VALUES (
+        '2026-03-22T00:00:02+00:00',
+        'hl_ws_trades',
+        'ETH',
+        'B',
+        0.0,
+        1.0,
+        'hash-13b',
+        131,
+        '["0xaaa","0xbbb"]'::jsonb,
+        '{"tid":131}'::jsonb
+    )
+    """,
+    """
+    INSERT INTO hl_trades (time, source, coin, side, price, size, hash, tid, users, payload)
+    VALUES (
+        '2026-03-22T00:00:02+00:00',
+        'hl_ws_trades',
+        'ETH',
+        'B',
+        'Infinity'::float8,
+        1.0,
+        'hash-13c',
+        132,
+        '["0xaaa","0xbbb"]'::jsonb,
+        '{"tid":132}'::jsonb
+    )
+    """,
+    """
+    INSERT INTO hl_trades (time, source, coin, side, price, size, hash, tid, users, payload)
+    VALUES (
+        '2026-03-22T00:00:02+00:00',
+        'hl_ws_trades',
+        'ETH',
+        'B',
+        10.0,
+        -1.0,
+        'hash-13e',
+        134,
+        '["0xaaa","0xbbb"]'::jsonb,
+        '{"tid":134}'::jsonb
+    )
+    """,
+    """
+    INSERT INTO hl_trades (time, source, coin, side, price, size, hash, tid, users, payload)
+    VALUES (
+        '2026-03-22T00:00:02+00:00',
+        'hl_ws_trades',
+        'ETH',
+        'B',
+        10.0,
+        0.0,
+        'hash-13f',
+        135,
+        '["0xaaa","0xbbb"]'::jsonb,
+        '{"tid":135}'::jsonb
+    )
+    """,
+    """
+    INSERT INTO hl_trades (time, source, coin, side, price, size, hash, tid, users, payload)
+    VALUES (
+        '2026-03-22T00:00:02+00:00',
+        'hl_ws_trades',
+        'ETH',
+        'B',
+        10.0,
+        '-Infinity'::float8,
+        'hash-13g',
+        136,
+        '["0xaaa","0xbbb"]'::jsonb,
+        '{"tid":136}'::jsonb
+    )
+    """,
+    """
+    INSERT INTO hl_trades (time, source, coin, side, price, size, hash, tid, users, payload)
+    VALUES (
         '1969-12-31T23:59:59+00:00',
         'hl_ws_trades',
         'ETH',

@@ -6,6 +6,7 @@ from copy import deepcopy
 
 import pytest
 
+from ._ws_test_support import drain_session_callbacks
 from .test_trades_collector import _load_fixture_messages, _start_collector
 
 
@@ -36,6 +37,7 @@ async def test_trades_collector_skips_invalid_rows_and_keeps_valid_siblings(
 
     session.emit("trades:eth", mixed_message)
     session.emit("trades:btc", messages[1])
+    await drain_session_callbacks()
 
     await collector.stop()
     await asyncio.wait_for(task, timeout=1.0)

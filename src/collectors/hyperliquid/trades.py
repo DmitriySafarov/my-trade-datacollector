@@ -9,6 +9,12 @@ import asyncpg
 from src.collectors.base import BaseCollector
 from src.db.batch_writer import BatchWriter
 
+from .lifecycle_support import (
+    close_writers,
+    collect_task_errors,
+    merge_error,
+    stop_manager_task,
+)
 from .trade_parsing import parse_hyperliquid_trade
 from .trade_storage import HyperliquidTradeStore
 from .ws_manager import HyperliquidWsManager
@@ -56,6 +62,7 @@ class HyperliquidTradesCollector(BaseCollector):
                     name=f"trades:{coin.lower()}",
                     subscription={"type": "trades", "coin": coin},
                     handler=self._handle_message,
+                    source_id=SOURCE_ID,
                 )
                 for coin in self._coins
             ],
@@ -69,27 +76,43 @@ class HyperliquidTradesCollector(BaseCollector):
         self._stopped.clear()
         manager_task = asyncio.create_task(self._manager.run())
         writer_failure_task = asyncio.create_task(self._writer.wait_failure())
+        error: BaseException | None = None
         try:
             done, _ = await asyncio.wait(
                 {manager_task, writer_failure_task},
                 return_when=asyncio.FIRST_COMPLETED,
             )
             if writer_failure_task in done:
-                await self._manager.stop()
+                error = merge_error(
+                    error,
+                    await collect_task_errors([writer_failure_task]),
+                )
+                error = merge_error(
+                    error,
+                    await stop_manager_task(self._manager, manager_task),
+                )
+            else:
                 await manager_task
-                await writer_failure_task
-            await manager_task
-            if self._writer.failure is not None:
+            if error is None and self._writer.failure is not None:
                 raise RuntimeError(
                     f"BatchWriter {self._writer.name} has failed"
                 ) from self._writer.failure
+        except BaseException as caught:
+            error = merge_error(error, caught)
         finally:
             writer_failure_task.cancel()
             await asyncio.gather(writer_failure_task, return_exceptions=True)
             try:
-                await self._writer.close()
+                if not manager_task.done():
+                    error = merge_error(
+                        error,
+                        await stop_manager_task(self._manager, manager_task),
+                    )
+                error = merge_error(error, await close_writers([self._writer]))
             finally:
                 self._stopped.set()
+        if error is not None:
+            raise error
 
     async def stop(self) -> None:
         try:

@@ -68,8 +68,8 @@ def parse_hyperliquid_trade(
         source=source,
         coin=coin,
         side=side,
-        price=_require_float(trade, "px"),
-        size=_require_float(trade, "sz"),
+        price=_require_positive_float(trade, "px"),
+        size=_require_positive_float(trade, "sz"),
         hash=_require_str(trade, "hash"),
         tid=_require_positive_int(
             trade,
@@ -92,6 +92,13 @@ def _require_float(values: Mapping[str, object], key: str) -> float:
         raise ValueError(f"Hyperliquid trade field {key} must be numeric") from error
     if not math.isfinite(parsed):
         raise ValueError(f"Hyperliquid trade field {key} must be finite")
+    return parsed
+
+
+def _require_positive_float(values: Mapping[str, object], key: str) -> float:
+    parsed = _require_float(values, key)
+    if parsed <= 0:
+        raise ValueError(f"Hyperliquid trade field {key} must be positive")
     return parsed
 
 

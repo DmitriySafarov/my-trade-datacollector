@@ -20,11 +20,13 @@ async def test_upgrade_repairs_trade_and_news_replay_history(tmp_path: Path) -> 
         async with pool.acquire() as connection:
             await connection.execute(
                 """
-                INSERT INTO hl_trades (time, source, coin, tid, ingested_at)
+                INSERT INTO hl_trades (
+                    time, source, coin, tid, price, size, ingested_at
+                )
                 VALUES
-                    ($1, 'hl_ws_trades', 'ETH', 11, $2),
-                    ($3, 'hl_ws_trades', 'ETH', 11, $4),
-                    ($5, 'hl_ws_trades', 'ETH', NULL, $5)
+                    ($1, 'hl_ws_trades', 'ETH', 11, 10.0, 1.0, $2),
+                    ($3, 'hl_ws_trades', 'ETH', 11, 10.0, 1.0, $4),
+                    ($5, 'hl_ws_trades', 'ETH', NULL, 10.0, 1.0, $5)
                 """,
                 utc("2026-03-22T00:01:00+00:00"),
                 utc("2026-03-22T00:10:00+00:00"),

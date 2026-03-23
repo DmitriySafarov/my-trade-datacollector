@@ -63,9 +63,21 @@ class FakeHyperliquidSessionFactory:
         return await self._created.get()
 
 
-def make_subscription(name: str, handler, *, coin: str = "ETH"):
+def make_subscription(
+    name: str,
+    handler,
+    *,
+    coin: str = "ETH",
+    source_id: str | None = None,
+):
     return HyperliquidWsSubscription(
         name=name,
         subscription={"type": "trades", "coin": coin},
         handler=handler,
+        source_id=source_id,
     )
+
+
+async def drain_session_callbacks(turns: int = 5) -> None:
+    for _ in range(turns):
+        await asyncio.sleep(0)

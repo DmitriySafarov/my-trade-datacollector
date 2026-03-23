@@ -7,7 +7,7 @@ from src.config.bootstrap import BootstrapConfig
 from src.config.runtime import RuntimeSettings
 
 from .base import BaseCollector
-from .hyperliquid import HyperliquidTradesCollector
+from .hyperliquid import HyperliquidMarketCollector
 
 
 def build_runtime_collectors(
@@ -21,7 +21,7 @@ def build_runtime_collectors(
             "runtime collector factory requires initialized pool and runtime settings"
         )
     return [
-        HyperliquidTradesCollector(
+        HyperliquidMarketCollector(
             base_url=config.hyperliquid_api_url,
             pool=pool,
             count_limit=runtime_settings.default_batch_count,

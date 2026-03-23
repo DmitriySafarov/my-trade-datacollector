@@ -68,6 +68,16 @@ class BatchWriter(Generic[T]):
         if task is not None:
             await asyncio.shield(task)
 
+    async def abort(self) -> None:
+        async with self._state_lock:
+            self._closed = True
+            self._cancel_timer_locked()
+            task = self._flush_task
+            if task is not None:
+                task.cancel()
+        if task is not None:
+            await asyncio.gather(task, return_exceptions=True)
+
     async def wait_failure(self) -> None:
         await self._failure_event.wait()
         assert self._failure is not None

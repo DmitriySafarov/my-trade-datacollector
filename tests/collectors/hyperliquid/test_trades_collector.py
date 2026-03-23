@@ -12,7 +12,11 @@ import pytest
 from src.collectors.hyperliquid import HyperliquidTradesCollector
 from src.db.pool import close_pool
 
-from ._ws_test_support import FakeHyperliquidSession, FakeHyperliquidSessionFactory
+from ._ws_test_support import (
+    FakeHyperliquidSession,
+    FakeHyperliquidSessionFactory,
+    drain_session_callbacks,
+)
 
 
 FIXTURE_PATH = (
@@ -78,6 +82,7 @@ async def test_trades_collector_flushes_buffered_rows_on_stop(
 
     session.emit("trades:eth", messages[0])
     session.emit("trades:btc", messages[1])
+    await drain_session_callbacks()
 
     await collector.stop()
     await asyncio.wait_for(task, timeout=1.0)
@@ -118,6 +123,7 @@ async def test_trades_collector_deduplicates_replayed_trade_ids(
 
     session.emit("trades:eth", message)
     session.emit("trades:eth", replay)
+    await drain_session_callbacks()
 
     await collector.stop()
     await asyncio.wait_for(task, timeout=1.0)

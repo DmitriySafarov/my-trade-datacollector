@@ -144,7 +144,7 @@ async def _create_pool_with_retry(
 
 
 async def _ensure_postgres_service() -> None:
-    if TEST_DB_BOOTSTRAP == "external":
+    if TEST_DB_BOOTSTRAP == "external" or TEST_DB_HOST_OVERRIDE is not None:
         await _wait_for_database("postgres")
         return
     if TEST_DB_BOOTSTRAP != "compose":
@@ -184,6 +184,14 @@ async def _ensure_postgres_service() -> None:
         raise RuntimeError("docker compose up -d postgres timed out.") from error
     if process.returncode != 0:
         output = (stderr or stdout).decode().strip()
+        if (
+            "docker.sock" in output and "permission denied" in output.lower()
+        ) or "operation not permitted" in output.lower():
+            raise RuntimeError(
+                "docker compose up -d postgres failed because Docker access is unavailable. "
+                "Use TEST_DB_BOOTSTRAP=external with TEST_DB_HOST and TEST_DB_PORT, "
+                f"or rerun where Docker socket access is allowed. Original error: {output}"
+            )
         raise RuntimeError(f"docker compose up -d postgres failed: {output}")
 
     await _wait_for_database("postgres")

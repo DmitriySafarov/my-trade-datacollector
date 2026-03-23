@@ -2,23 +2,18 @@ from __future__ import annotations
 
 import asyncio
 import logging
-from collections.abc import Sequence
+from collections.abc import Coroutine, Sequence
 
+from . import ws_manager_support as support, ws_run_control
 from .ws_bridge import HyperliquidWsBridge
-from .ws_manager_support import (
-    build_bridge_health_snapshot,
-    close_session,
-    compute_reconnect_delay,
-    open_session,
-    wait_for_disconnect,
-    wait_bridge_ready,
-    wait_for_stop_or_timeout,
-)
+from .ws_close_support import close_manager_session
+from .lifecycle_support import merge_error
 from .ws_session import HyperliquidWsSession, SessionFactory, SdkHyperliquidWsSession
 from .ws_subscription import HyperliquidWsSubscription
 
 LOGGER = logging.getLogger(__name__)
 SESSION_CLOSE_TIMEOUT_SECONDS = 6.0
+wait_for_stop_or_timeout = support.wait_for_stop_or_timeout
 
 
 class HyperliquidWsManager:
@@ -43,9 +38,12 @@ class HyperliquidWsManager:
         self.shutdown_drain_timeout_seconds = shutdown_drain_timeout_seconds
         self._session_factory = session_factory
         self._stop_event = asyncio.Event()
+        self._stop_requested = False
         self._run_stopped = asyncio.Event()
         self._run_stopped.set()
         self._session: HyperliquidWsSession | None = None
+        self._failed_close_session: HyperliquidWsSession | None = None
+        self._session_close_task: asyncio.Task[None] | None = None
         self._session_lock = asyncio.Lock()
         self._reconnect_count = 0
         self._bridge = HyperliquidWsBridge(
@@ -54,11 +52,18 @@ class HyperliquidWsManager:
             on_fatal=self._stop_event.set,
         )
 
-    async def run(self) -> None:
-        self._run_stopped.clear()
-        await self._bridge.start()
+    def run(self) -> Coroutine[object, object, None]:
+        ws_run_control.begin_run(self)
+        return self._run()
+
+    async def _run(self) -> None:
         error: BaseException | None = None
+        bridge_drained = False
         try:
+            if self._stop_requested:
+                return
+            self._stop_event.clear()
+            await self._bridge.start()
             await self._supervise()
             if self._bridge.failure is None:
                 timeout = (
@@ -66,57 +71,66 @@ class HyperliquidWsManager:
                     if self._stop_event.is_set()
                     else None
                 )
-                drained = await self._bridge.drain(timeout=timeout)
-                if timeout is not None and not drained:
-                    LOGGER.warning(
-                        "hyperliquid_ws_shutdown_drain_timeout timeout_seconds=%.2f",
-                        timeout,
-                    )
+                await support.drain_bridge(
+                    self._bridge,
+                    timeout=timeout,
+                    logger=LOGGER if timeout is not None else None,
+                )
+                bridge_drained = True
             if self._bridge.failure is not None:
                 raise self._bridge.failure
         except BaseException as caught:
             error = caught
         finally:
             try:
-                if error is None:
-                    await self._close_session(reason="shutdown_cleanup")
+                await close_manager_session(
+                    self,
+                    reason="shutdown_cleanup",
+                    timeout_seconds=SESSION_CLOSE_TIMEOUT_SECONDS,
+                    logger=LOGGER,
+                    retry_failed_session=True,
+                )
             except BaseException as close_error:
-                error = close_error
+                error = merge_error(error, close_error)
+            try:
+                await support.drain_after_close(self, bridge_drained=bridge_drained)
+            except BaseException as drain_error:
+                error = merge_error(error, drain_error)
             finally:
                 await self._bridge.stop()
-                self._run_stopped.set()
+                ws_run_control.finish_run(self)
         if error is not None:
             raise error
 
     async def stop(self) -> None:
+        if self._run_stopped.is_set():
+            return
+        self._stop_requested = True
         self._stop_event.set()
         self._bridge.begin_shutdown()
-        if not self._run_stopped.is_set():
-            timeout = (
-                self.shutdown_drain_timeout_seconds + SESSION_CLOSE_TIMEOUT_SECONDS
-            )
-            try:
-                await asyncio.wait_for(self._run_stopped.wait(), timeout=timeout)
-            except TimeoutError as error:
-                raise RuntimeError("Hyperliquid websocket stop timed out") from error
+        timeout = (
+            self.shutdown_drain_timeout_seconds + 2 * SESSION_CLOSE_TIMEOUT_SECONDS
+        )
+        try:
+            await asyncio.wait_for(self._run_stopped.wait(), timeout=timeout)
+        except TimeoutError as error:
+            raise RuntimeError("Hyperliquid websocket stop timed out") from error
 
     async def wait_ready(self) -> None:
-        await wait_bridge_ready(self._bridge)
+        await support.wait_bridge_ready(self._bridge)
 
-    def health_snapshot(self) -> dict[str, object]:
-        return build_bridge_health_snapshot(self._bridge, self._reconnect_count)
+    def health_snapshot(self):
+        return support.build_bridge_health_snapshot(self._bridge, self._reconnect_count)
 
     async def _supervise(self) -> None:
         attempt = 0
         recovering = False
         while not self._stop_event.is_set() and self._bridge.failure is None:
             generation = self._bridge.next_generation()
-            opened = asyncio.Event()
-            closed = asyncio.Event()
-            errored = asyncio.Event()
+            opened, closed, errored = asyncio.Event(), asyncio.Event(), asyncio.Event()
             self._bridge.state = "reconnecting" if recovering else "connecting"
             try:
-                session = open_session(
+                session = support.open_session(
                     session_factory=self._session_factory,
                     base_url=self.base_url,
                     bridge=self._bridge,
@@ -127,15 +141,18 @@ class HyperliquidWsManager:
                 )
                 async with self._session_lock:
                     self._session = session
+                    self._failed_close_session = self._session_close_task = None
                 session.start()
             except Exception as error:
-                self._bridge.handle_error(generation, error)
-                self._bridge.last_disconnect_reason = (
-                    f"setup_failed:{type(error).__name__}"
+                await support.cleanup_setup_failure(
+                    self,
+                    generation=generation,
+                    error=error,
+                    logger=LOGGER,
+                    timeout_seconds=SESSION_CLOSE_TIMEOUT_SECONDS,
                 )
-                await self._close_session(reason="setup_cleanup")
             else:
-                await wait_for_disconnect(
+                await support.wait_for_disconnect(
                     session=session,
                     opened=opened,
                     closed=closed,
@@ -153,15 +170,19 @@ class HyperliquidWsManager:
                         reason="session_exited",
                     ),
                 )
-                await self._close_session(reason="reconnect_cleanup")
+                await close_manager_session(
+                    self,
+                    reason="reconnect_cleanup",
+                    timeout_seconds=SESSION_CLOSE_TIMEOUT_SECONDS,
+                    logger=LOGGER,
+                )
             if self._stop_event.is_set() or self._bridge.failure is not None:
                 break
             recovering = True
             self._bridge.state = "reconnecting"
             self._reconnect_count += 1
-            if opened.is_set():
-                attempt = 0
-            delay = compute_reconnect_delay(
+            attempt = 0 if opened.is_set() else attempt
+            delay = support.compute_reconnect_delay(
                 base_seconds=self.reconnect_base_seconds,
                 max_seconds=self.reconnect_max_seconds,
                 attempt=attempt,
@@ -176,23 +197,3 @@ class HyperliquidWsManager:
             )
             if await wait_for_stop_or_timeout(self._stop_event, delay):
                 break
-
-    async def _close_session(self, *, reason: str) -> None:
-        async with self._session_lock:
-            session = self._session
-        if session is None:
-            return
-        try:
-            await close_session(session, timeout_seconds=SESSION_CLOSE_TIMEOUT_SECONDS)
-        except Exception as error:
-            self._bridge.last_disconnect_reason = "session_close_timeout"
-            self._bridge.last_error = repr(error)
-            LOGGER.warning(
-                "hyperliquid_ws_session_close_failed reason=%s error=%r",
-                reason,
-                error,
-            )
-            raise
-        async with self._session_lock:
-            if self._session is session:
-                self._session = None

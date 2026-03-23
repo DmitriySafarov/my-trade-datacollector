@@ -5,6 +5,7 @@ from copy import deepcopy
 
 import pytest
 
+from ._ws_test_support import drain_session_callbacks
 from .test_trades_collector import _load_fixture_messages, _start_collector
 
 
@@ -34,6 +35,7 @@ async def test_trades_collector_persists_across_reconnect_without_duplicate_tids
     await collector.wait_ready()
     replacement.emit("trades:eth", replay)
     replacement.emit("trades:eth", resumed)
+    await drain_session_callbacks()
 
     await collector.stop()
     await asyncio.wait_for(task, timeout=1.0)

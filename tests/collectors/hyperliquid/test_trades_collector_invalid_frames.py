@@ -5,6 +5,7 @@ import logging
 
 import pytest
 
+from ._ws_test_support import drain_session_callbacks
 from .test_trades_collector import _load_fixture_messages, _start_collector
 
 
@@ -28,6 +29,7 @@ async def test_trades_collector_skips_invalid_envelopes(
 
     session.emit("trades:eth", message)
     session.emit("trades:eth", _load_fixture_messages()[0])
+    await drain_session_callbacks()
 
     await collector.stop()
     await asyncio.wait_for(task, timeout=1.0)

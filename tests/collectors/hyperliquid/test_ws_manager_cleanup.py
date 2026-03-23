@@ -74,4 +74,30 @@ async def test_manager_surfaces_live_session_close_timeout(
     assert len(factory.sessions) == 1
     assert first.close_called is True
     assert first.is_alive() is True
+    assert manager._session is first
     assert "hyperliquid_ws_session_close_failed" in caplog.text
+
+
+@pytest.mark.asyncio
+async def test_manager_cancellation_closes_live_session() -> None:
+    factory = FakeHyperliquidSessionFactory()
+
+    async def handler(_message: object) -> None:
+        return None
+
+    manager = HyperliquidWsManager(
+        base_url="https://api.hyperliquid.xyz",
+        subscriptions=[make_subscription("trades", handler)],
+        session_factory=factory,
+    )
+    task = asyncio.create_task(manager.run())
+    session = await factory.next_session()
+
+    session.open()
+    await manager.wait_ready()
+    task.cancel()
+
+    with pytest.raises(asyncio.CancelledError):
+        await asyncio.wait_for(task, timeout=1.0)
+
+    assert session.closed is True

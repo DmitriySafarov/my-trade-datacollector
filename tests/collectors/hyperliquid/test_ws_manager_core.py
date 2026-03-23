@@ -149,6 +149,42 @@ async def test_manager_reconnects_and_clears_ready_after_disconnect() -> None:
     await asyncio.wait_for(task, timeout=1.0)
 
 
+@pytest.mark.asyncio
+async def test_manager_records_gap_window_after_reconnect() -> None:
+    factory = FakeHyperliquidSessionFactory()
+
+    async def handler(_message: object) -> None:
+        return None
+
+    manager = HyperliquidWsManager(
+        base_url="https://api.hyperliquid.xyz",
+        subscriptions=[make_subscription("trades", handler)],
+        reconnect_base_seconds=0.01,
+        reconnect_max_seconds=0.01,
+        reconnect_jitter_ratio=0.0,
+        session_factory=factory,
+    )
+    task = asyncio.create_task(manager.run())
+    first = await factory.next_session()
+
+    first.open()
+    await manager.wait_ready()
+    first.disconnect("network_drop")
+    await asyncio.wait_for(factory.next_session(), timeout=1.0)
+    await asyncio.sleep(0.02)
+    factory.sessions[-1].open()
+    await manager.wait_ready()
+
+    snapshot = manager.health_snapshot()
+    assert snapshot["current_gap_started_at"] is None
+    assert snapshot["last_gap_started_at"] is not None
+    assert snapshot["last_gap_ended_at"] is not None
+    assert snapshot["last_gap_duration_seconds"] >= 0
+
+    await manager.stop()
+    await asyncio.wait_for(task, timeout=1.0)
+
+
 async def _wait_for(predicate, *, interval: float = 0.01) -> None:
     while not predicate():
         await asyncio.sleep(interval)
