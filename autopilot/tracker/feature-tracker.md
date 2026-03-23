@@ -4,7 +4,7 @@
 
 - [x] P0.1: Docker Compose (PostgreSQL 16 + TimescaleDB + Python 3.12 service)
 - [x] P0.2: Bronze tables — all 19 hypertables (hl_trades, hl_l2book, hl_asset_ctx, hl_candles, bn_agg_trades, bn_depth, bn_mark_price, bn_liquidations, bn_tickers, bn_klines, news, fred_data, fear_greed, cc_exchange_vol, cc_price, finnhub_quotes, market_status, s3_trades, s3_l2book)
-- [ ] P0.3: Silver views (v_trades, v_funding, v_orderbook, v_oi, v_candles, v_news_deduped)
+- [x] P0.3: Silver views (v_trades, v_funding, v_orderbook, v_oi, v_candles, v_news_deduped)
 - [x] P0.4: Settings table (database-backed config)
 - [ ] P0.5: TimescaleDB compression policies (48h raw → compressed)
 - [x] P0.6: asyncpg connection pool + batch writer (dual trigger)

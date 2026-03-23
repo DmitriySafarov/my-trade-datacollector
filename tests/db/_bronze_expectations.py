@@ -61,4 +61,9 @@ EXPECTED_NEW_MIGRATIONS = {
     "0024_reference_compression_policy_repair.sql",
     "0025_bronze_immutability_guards.sql",
     "0026_bronze_immutability_registry.sql",
+    "0027_silver_views.sql",
+    "0028_silver_views.sql",
+    "0029_silver_news_view.sql",
+    "0030_silver_market_replay_repairs.sql",
+    "0031_silver_news_identity_repairs.sql",
 }

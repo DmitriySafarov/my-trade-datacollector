@@ -24,12 +24,20 @@ def utc(value: str) -> datetime:
 def write_migration_subset(tmp_path: Path, name: str, filenames: set[str]) -> Path:
     migration_dir = tmp_path / name
     migration_dir.mkdir()
+    copied: set[str] = set()
     for source in sorted((ROOT / "migrations").glob("*.sql")):
         if source.name in filenames:
             (migration_dir / source.name).write_text(
                 source.read_text(encoding="utf-8"),
                 encoding="utf-8",
             )
+            copied.add(source.name)
+    missing = filenames - copied
+    if missing:
+        missing_list = ", ".join(sorted(missing))
+        raise FileNotFoundError(
+            f"Missing migration files for subset {name}: {missing_list}"
+        )
     return migration_dir
 
 
@@ -39,6 +47,8 @@ async def upgrade_db(tmp_path: Path) -> AsyncIterator[asyncpg.Pool]:
     db_name = f"collector_upgrade_{uuid.uuid4().hex[:12]}"
     admin_pool = await _create_pool_with_retry("postgres")
     pool = None
+    cleanup_may_raise = True
+    cleanup_error: Exception | None = None
     try:
         async with admin_pool.acquire() as connection:
             await connection.execute(f'CREATE DATABASE "{db_name}"')
@@ -54,14 +64,26 @@ async def upgrade_db(tmp_path: Path) -> AsyncIterator[asyncpg.Pool]:
         )
         await run_migrations(pool, initial)
         yield pool
+        cleanup_may_raise = False
     finally:
         if pool is not None:
-            await close_pool(pool)
-        async with admin_pool.acquire() as connection:
-            await connection.execute(
-                f'DROP DATABASE IF EXISTS "{db_name}" WITH (FORCE)'
-            )
-        await close_pool(admin_pool)
+            try:
+                await close_pool(pool)
+            except Exception as error:
+                cleanup_error = cleanup_error or error
+        try:
+            async with admin_pool.acquire() as connection:
+                await connection.execute(
+                    f'DROP DATABASE IF EXISTS "{db_name}" WITH (FORCE)'
+                )
+        except Exception as error:
+            cleanup_error = cleanup_error or error
+        try:
+            await close_pool(admin_pool)
+        except Exception as error:
+            cleanup_error = cleanup_error or error
+        if cleanup_error is not None and not cleanup_may_raise:
+            raise cleanup_error
 
 
 async def apply_repair_migrations(

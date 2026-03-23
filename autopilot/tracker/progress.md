@@ -20,3 +20,11 @@
 - Decision: keep `0025` unchanged and layer `0026` on top to avoid migration drift while still making future Bronze immutability refresh reusable.
 - Issues: verify sandboxes that block both Docker access and local PostgreSQL transports still need the explicit external DB path, but the harness now supports that fallback cleanly.
 - Next step: start `P0.3` Silver views so normalized read models can build on the now-locked Bronze layer.
+
+- Completed `P0.3` by adding append-only Silver view migrations `0027` through `0031` for canonical trades, funding, orderbook, open interest, candles, and deduplicated news over Bronze.
+- Added real-PostgreSQL regression coverage for Silver normalization, replay cleanup, Hyperliquid REST recovery visibility, repaired news identity handling, and `0026 -> head` migration upgrades in `tests/db/test_silver_*.py` and `tests/db/test_migration_upgrade_silver_views.py`.
+- Hardened the Silver upgrade harness in `tests/db/_migration_upgrade.py` so migration subsets fail fast on missing files and teardown remains best-effort without masking cleanup work.
+- Decisions: keep `v_trades` canonical to Hyperliquid plus Binance aggregate trades only; keep `v_news_deduped` source-agnostic at one row per resolved dedup URL; treat Hyperliquid REST funding/candles as gap-fill behind WS-preferred Silver rows.
+- Issues: the task required five implementation/verify loops to reconcile replay-repair edge cases, Bronze news dedup semantics, and migration-upgrade coverage, but the final repo-wide validation is clean.
+- Validation: `./.venv/bin/ruff check .`, `./.venv/bin/ruff format --check .`, and `./.venv/bin/python -m pytest tests/ -v` all passed with `115 passed`.
+- Next step: start `P0.5` TimescaleDB compression policies now that Silver views are stable and fully covered by DB-backed tests.
