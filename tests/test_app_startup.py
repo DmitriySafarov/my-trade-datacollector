@@ -59,17 +59,6 @@ class _StopRequestingCollector(_StubCollector):
 
 
 @pytest.mark.asyncio
-async def test_start_fails_when_runtime_collector_factory_is_unconfigured(
-    migrated_db: dict[str, object],
-) -> None:
-    app = CollectorApplication(migrated_db["config"])
-
-    with pytest.raises(CollectorStartupError, match="runtime collector factory"):
-        await app.start()
-    await stop_application(app)
-
-
-@pytest.mark.asyncio
 async def test_start_fails_when_runtime_collector_factory_returns_no_collectors(
     monkeypatch: pytest.MonkeyPatch,
     migrated_db: dict[str, object],

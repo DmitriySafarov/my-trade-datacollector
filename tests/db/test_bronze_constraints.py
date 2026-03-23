@@ -62,8 +62,21 @@ async def test_source_checks_and_dedup_indexes_work(
         statements = [
             (
                 """
-                INSERT INTO hl_trades (time, source, coin, tid, price, size)
-                VALUES ('2026-03-22T00:03:00+00:00', 'hl_ws_trades', 'ETH', 11, 10.0, 1.0)
+                INSERT INTO hl_trades (
+                    time, source, coin, side, price, size, hash, tid, users, payload
+                )
+                VALUES (
+                    '2026-03-22T00:03:00+00:00',
+                    'hl_ws_trades',
+                    'ETH',
+                    'B',
+                    10.0,
+                    1.0,
+                    'hash-11',
+                    11,
+                    '["0xaaa","0xbbb"]'::jsonb,
+                    '{"tid":11}'::jsonb
+                )
                 ON CONFLICT (source, time, coin, tid) WHERE tid IS NOT NULL DO NOTHING
                 """,
                 "SELECT count(*) FROM hl_trades WHERE tid = 11",

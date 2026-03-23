@@ -22,8 +22,21 @@ async def test_v_trades_v_funding_and_v_oi_normalize_and_filter_rows(
     async with pool.acquire() as connection:
         await connection.execute(
             """
-            INSERT INTO hl_trades (time, source, coin, side, price, size, tid)
-            VALUES ($1, 'hl_ws_trades', 'ETH', 'B', 100.5, 2.0, 11)
+            INSERT INTO hl_trades (
+                time, source, coin, side, price, size, hash, tid, users, payload
+            )
+            VALUES (
+                $1,
+                'hl_ws_trades',
+                'ETH',
+                'B',
+                100.5,
+                2.0,
+                'hash-11',
+                11,
+                '["0xaaa","0xbbb"]'::jsonb,
+                '{"tid":11}'::jsonb
+            )
             """,
             trade_time,
         )

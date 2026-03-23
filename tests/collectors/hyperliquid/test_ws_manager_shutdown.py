@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import asyncio
+import logging
 
 import pytest
 
@@ -38,6 +39,42 @@ async def test_stop_waits_for_bounded_queue_drain() -> None:
 
     assert handled == [1, 2, 3]
     assert task.done() is True
+
+
+@pytest.mark.asyncio
+async def test_stop_cancels_workers_after_drain_timeout(
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    factory = FakeHyperliquidSessionFactory()
+    handled: list[int] = []
+    release = asyncio.Event()
+
+    async def handler(message: object) -> None:
+        handled.append(message["seq"])
+        await release.wait()
+
+    manager = HyperliquidWsManager(
+        base_url="https://api.hyperliquid.xyz",
+        subscriptions=[make_subscription("trades", handler)],
+        reconnect_jitter_ratio=0.0,
+        shutdown_drain_timeout_seconds=0.01,
+        session_factory=factory,
+    )
+    caplog.set_level(logging.WARNING)
+    task = asyncio.create_task(manager.run())
+    session = await factory.next_session()
+
+    session.open()
+    await manager.wait_ready()
+    for seq in (1, 2, 3):
+        session.emit("trades:eth", {"seq": seq})
+    await asyncio.wait_for(_wait_for(lambda: handled == [1]), timeout=1.0)
+
+    await manager.stop()
+
+    assert handled == [1]
+    assert "hyperliquid_ws_shutdown_drain_timeout" in caplog.text
+    await asyncio.wait_for(task, timeout=1.0)
 
 
 async def _wait_for(predicate, *, interval: float = 0.01) -> None:

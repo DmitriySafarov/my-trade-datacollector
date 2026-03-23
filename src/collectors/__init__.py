@@ -7,6 +7,7 @@ from src.config.bootstrap import BootstrapConfig
 from src.config.runtime import RuntimeSettings
 
 from .base import BaseCollector
+from .hyperliquid import HyperliquidTradesCollector
 
 
 def build_runtime_collectors(
@@ -15,5 +16,15 @@ def build_runtime_collectors(
     pool: asyncpg.Pool | None,
     runtime_settings: RuntimeSettings | None,
 ) -> list[BaseCollector]:
-    del config, pool, runtime_settings
-    raise CollectorStartupError("runtime collector factory is not wired")
+    if pool is None or runtime_settings is None:
+        raise CollectorStartupError(
+            "runtime collector factory requires initialized pool and runtime settings"
+        )
+    return [
+        HyperliquidTradesCollector(
+            base_url=config.hyperliquid_api_url,
+            pool=pool,
+            count_limit=runtime_settings.default_batch_count,
+            time_limit_seconds=runtime_settings.default_batch_seconds,
+        )
+    ]

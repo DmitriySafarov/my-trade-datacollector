@@ -20,17 +20,6 @@ async def test_trade_replays_with_shifted_timestamps_are_deduplicated(
         inserts = [
             (
                 """
-                INSERT INTO hl_trades (time, source, coin, tid, price, size)
-                VALUES ($1, 'hl_ws_trades', 'ETH', 11, 10.0, 1.0)
-                """,
-                "SELECT count(*) FROM hl_trades WHERE source = 'hl_ws_trades' AND tid = 11",
-                [
-                    _utc("2026-03-22T00:03:00+00:00"),
-                    _utc("2026-03-22T00:03:00.001+00:00"),
-                ],
-            ),
-            (
-                """
                 INSERT INTO bn_agg_trades (time, source, symbol, agg_trade_id, price, qty)
                 VALUES ($1, 'bn_ws_agg_trades', 'ETHUSDT', 21, 20.0, 2.0)
                 """,

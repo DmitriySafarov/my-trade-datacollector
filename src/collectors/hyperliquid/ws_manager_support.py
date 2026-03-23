@@ -11,7 +11,7 @@ from .ws_support import (
     build_wait_ready_error,
     wait_for_ready_or_terminal,
 )
-from .ws_session import HyperliquidWsSession
+from .ws_session import HyperliquidWsSession, SessionFactory
 
 if TYPE_CHECKING:
     from .ws_bridge import HyperliquidWsBridge
@@ -86,6 +86,47 @@ async def wait_for_stop_or_timeout(stop_event: asyncio.Event, delay: float) -> b
     except asyncio.TimeoutError:
         return False
     return True
+
+
+async def close_session(
+    session: HyperliquidWsSession, *, timeout_seconds: float
+) -> None:
+    try:
+        await asyncio.wait_for(
+            asyncio.to_thread(session.close), timeout=timeout_seconds
+        )
+    except TimeoutError as error:
+        raise RuntimeError("Hyperliquid websocket session close timed out") from error
+    if session.is_alive():
+        raise RuntimeError("Hyperliquid websocket thread did not stop")
+
+
+def open_session(
+    *,
+    session_factory: SessionFactory,
+    base_url: str,
+    bridge: HyperliquidWsBridge,
+    generation: int,
+    opened: asyncio.Event,
+    closed: asyncio.Event,
+    errored: asyncio.Event,
+) -> HyperliquidWsSession:
+    session = session_factory(
+        base_url,
+        bridge.threadsafe_callback(bridge.handle_open, generation, opened),
+        bridge.threadsafe_callback(bridge.handle_close, generation, closed),
+        bridge.threadsafe_callback(
+            handle_session_error,
+            bridge,
+            generation,
+            errored,
+        ),
+    )
+    for key, definition in bridge.subscriptions.items():
+        session.subscribe(
+            definition.subscription, bridge.message_callback(generation, key)
+        )
+    return session
 
 
 def handle_session_error(
