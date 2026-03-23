@@ -36,3 +36,11 @@
 - Issues: the task needed five verify/repair loops to close reconnect, shutdown, timeout, overflow, and late-callback races; silent half-open detection remains deferred to the later reliability phase.
 - Validation: `./.venv/bin/ruff check .`, `./.venv/bin/ruff format --check .`, and `./.venv/bin/python -m pytest tests/ -v` all passed with `137 passed`.
 - Next step: start `P1.2` Hyperliquid trades collector on top of the now-stable WS manager.
+
+- Completed `P1.2` by adding the Hyperliquid ETH/BTC trades collector in `src/collectors/hyperliquid/`, wiring runtime startup, and landing Bronze writes into `hl_trades` through a dedicated COPY-based storage helper.
+- Added and expanded DB-backed coverage for Bronze landing, replay deduplication, malformed-envelope quarantine, invalid-row quarantine, reconnect persistence, parser bounds, batch-writer cancellation safety, and WS shutdown/cleanup timeout behavior across `tests/collectors/hyperliquid/`, `tests/test_batch_writer.py`, and `tests/test_runtime_collectors.py`.
+- Added `migrations/0032_hl_trades_guards_registry.sql` to harden direct `hl_trades` inserts and move replay-key state off a single hot registry table into bucketed partitions.
+- Decisions: keep the collector on the existing single Hyperliquid WS manager; quarantine malformed trade rows per-record instead of failing the stream; fail closed when a live Hyperliquid session cannot be stopped; keep shutdown bounded at the manager layer while still flushing the writer-owned Bronze batch.
+- Issues: this task required five verify/repair loops to reconcile timer-flush cancellation, shutdown/reconnect semantics, parser range safety, DB guardrails, and realistic cleanup-timeout test coverage.
+- Validation: `./.venv/bin/python -m ruff check .`, `./.venv/bin/python -m ruff format --check .`, and `./.venv/bin/python -m pytest tests/ -v` all passed with `171 passed`.
+- Next step: start `P1.3` Hyperliquid L2Book collector on top of the now-hardened WS manager and replay-guard path.
