@@ -23,7 +23,7 @@
 
 ## Phase 2: Hyperliquid REST
 
-- [ ] P2.1: REST polling framework (scheduled async tasks)
+- [x] P2.1: REST polling framework (scheduled async tasks)
 - [ ] P2.2: Candles snapshot collector — every 4h (source: hl_rest_candles)
 - [ ] P2.3: Funding history collector — every 8h (source: hl_rest_funding)
 

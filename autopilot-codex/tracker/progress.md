@@ -73,3 +73,11 @@
 - Decisions: `is_closed` heuristic based on `T != t` (Hyperliquid WS open candles repeat open_time as close_time — verified against live API); `VALID_INTERVALS` as ordered tuple for deterministic subscription order; `trades_count` optional (n field may be absent).
 - Validation: `./.venv/bin/ruff check .`, `./.venv/bin/ruff format --check .`, and `./.venv/bin/python -m pytest tests/ -v` all passed with `277 passed in 320.99s`.
 - Next step: start `P2.1` REST polling framework for scheduled async tasks.
+
+- Completed `P2.1` by implementing the REST polling framework in `src/collectors/rest/` with `BaseRestPoller(BaseCollector)` and `SlidingWindowRateLimiter` — reusable infrastructure for all future REST-based collectors (Phases 2-7).
+- Components: `base_poller.py` (188 lines) with async poll loop, exponential backoff on failures, startup failure threshold, health tracking, `_post_json`/`_get_json` helpers with automatic rate limiting, full `BaseCollector` lifecycle (`start`/`stop`/`wait_ready`/`health_snapshot`); `rate_limiter.py` (97 lines) with sliding-window weight tracking, async `acquire(weight)`, concurrent-safe via `asyncio.Lock`, optimal sleep calculation until oldest entry expires.
+- No new migrations needed — framework is pure Python with no DB schema changes. DB integration tests verify the COPY write path through `hl_rest_candles` Bronze hypertable.
+- Added 27 tests: 13 base poller tests (lifecycle, polling, error handling, backoff, rate limiter integration), 12 rate limiter tests (validation, weight tracking, expiration, concurrency, snapshot), 2 DB-backed integration tests (write to `hl_rest_candles`, health after write).
+- Decisions: no separate `RestClient` class (YAGNI — helpers on `BaseRestPoller` suffice); `aiohttp.ClientSession` managed in `start()` context; shared rate limiter for same-API pollers; direct COPY writes (low-volume REST data, count_limit=1 is unnecessary overhead); `max_startup_failures=5` raises during startup, post-readiness errors are logged but non-fatal.
+- Validation: `./.venv/bin/ruff check .`, `./.venv/bin/ruff format --check .`, and `./.venv/bin/python -m pytest tests/ -v` all passed with `304 passed in 165.97s`.
+- Next step: start `P2.2` Candles snapshot collector — subclass `BaseRestPoller`, poll Hyperliquid REST `candleSnapshot` every 4h, write to `hl_rest_candles`.
