@@ -7,6 +7,7 @@ from src.config.bootstrap import BootstrapConfig
 from src.config.runtime import RuntimeSettings
 
 from .base import BaseCollector
+from .binance import BinanceAggTradeCollector
 from .hyperliquid import HyperliquidMarketCollector
 from .rest import HyperliquidCandlesPoller, HyperliquidFundingPoller
 from .rest.rate_limiter import SlidingWindowRateLimiter
@@ -42,5 +43,10 @@ def build_runtime_collectors(
             base_url=config.hyperliquid_api_url,
             pool=pool,
             rate_limiter=hl_rest_limiter,
+        ),
+        BinanceAggTradeCollector(
+            pool=pool,
+            count_limit=runtime_settings.default_batch_count,
+            time_limit_seconds=runtime_settings.default_batch_seconds,
         ),
     ]

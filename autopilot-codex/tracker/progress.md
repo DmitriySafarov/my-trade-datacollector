@@ -107,3 +107,13 @@
 - Key decisions: raw aiohttp WebSocket (no python-binance SDK dependency); handler errors are non-fatal (tracked in `total_routing_errors`); `stop()` closes WS to unblock receive loop; no DB integration (pure connection infrastructure for P3.2–P3.7).
 - Validation: `./.venv/bin/ruff check .`, `./.venv/bin/ruff format --check .`, and `./.venv/bin/python -m pytest tests/ -v` all passed with `384 passed in 189s`.
 - Next step: start `P3.2` Binance aggTrade collector — ETH + BTC (source: bn_ws_agg_trades).
+
+## 2026-03-25
+
+- Completed `P3.2` by validating and landing the Binance Futures aggTrade WebSocket collector, which was fully implemented in uncommitted working-tree changes from a prior session.
+- Components: `agg_trade_parsing.py` (195 lines) with strict field validation (symbol allowlist, positive/non-negative int bounds, finite float checks, boolean type guard, timestamp range validation, JSON payload preservation); `agg_trade_storage.py` (40 lines) with COPY-based storage into `bn_agg_trades`; `agg_trade_collector.py` (190 lines) with `BinanceWsManager` lifecycle, `BatchWriter` integration, per-symbol stream handler closures, writer-failure → manager-stop coordination, bounded shutdown; runtime registration in `collectors/__init__.py`.
+- No new migrations needed — `bn_agg_trades` Bronze table (migration 0003), unique index, and compression policy pre-existed.
+- Added 30 unit tests for parsing (happy path, symbol validation, missing fields, numeric validation, timestamp validation, boolean validation, payload type) and 5 DB-backed integration tests (flush-on-stop with full column verification, replay dedup via unique index, timer-triggered flush, health snapshot, invalid payload quarantine). Updated runtime factory test to expect 4 collectors.
+- Decisions: COPY-based storage (high-throughput WS data, same pattern as Hyperliquid collectors); dedup via unique index `(source, time, symbol, agg_trade_id)` — no event_hash needed since agg_trade_id is globally unique per symbol; `trade_id` and `is_best_match` set to `None` (not present in aggTrade messages); per-symbol handler closures with `_sym=symbol` default arg to avoid late binding.
+- Validation: `./.venv/bin/ruff check .`, `./.venv/bin/ruff format --check .`, and `./.venv/bin/python -m pytest tests/ -v` all passed with `427 passed in 195s`.
+- Next step: start `P3.3` Binance markPrice @1s collector — ETH + BTC (source: bn_ws_mark_price).

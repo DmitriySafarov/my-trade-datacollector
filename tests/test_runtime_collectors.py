@@ -5,6 +5,7 @@ from unittest.mock import MagicMock
 import asyncpg
 
 from src.collectors import build_runtime_collectors
+from src.collectors.binance import BinanceAggTradeCollector
 from src.collectors.hyperliquid import HyperliquidMarketCollector
 from src.collectors.rest import HyperliquidCandlesPoller, HyperliquidFundingPoller
 from src.config.runtime import RuntimeSettings
@@ -25,7 +26,7 @@ def test_runtime_collector_factory_builds_all_collectors() -> None:
         ),
     )
 
-    assert len(collectors) == 3
+    assert len(collectors) == 4
 
     ws_collector = collectors[0]
     assert isinstance(ws_collector, HyperliquidMarketCollector)
@@ -80,3 +81,8 @@ def test_runtime_collector_factory_builds_all_collectors() -> None:
     assert rest_funding._rate_limiter is not None
     # Shared rate limiter between all HL REST pollers
     assert rest_funding._rate_limiter is rest_candles._rate_limiter
+
+    bn_agg_trades = collectors[3]
+    assert isinstance(bn_agg_trades, BinanceAggTradeCollector)
+    assert bn_agg_trades.source_ids == ("bn_ws_agg_trades",)
+    assert bn_agg_trades.name == "binance_agg_trades"
