@@ -8,23 +8,29 @@ import asyncpg
 from src.collectors.base import BaseCollector
 from src.db.batch_writer import BatchWriter
 
-from .asset_ctx_storage import HyperliquidAssetCtxStore
-from .l2book_storage import HyperliquidL2BookStore
 from .lifecycle_support import (
     close_writers,
     collect_task_errors,
     merge_error,
     stop_manager_task,
 )
+from .market_handlers import (
+    ASSET_CTX_SOURCE_ID,
+    CANDLES_SOURCE_ID,
+    L2BOOK_SOURCE_ID,
+    TRADES_SOURCE_ID,
+)
 from .market_support import build_market_subscriptions
-from .trade_storage import HyperliquidTradeStore
+from .market_writers import (
+    build_asset_ctx_writer,
+    build_candle_writer,
+    build_l2book_writer,
+    build_trade_writer,
+)
 from .ws_manager import HyperliquidWsManager
 from .ws_session import SdkHyperliquidWsSession, SessionFactory
 
 
-TRADES_SOURCE_ID = "hl_ws_trades"
-L2BOOK_SOURCE_ID = "hl_ws_l2book"
-ASSET_CTX_SOURCE_ID = "hl_ws_asset_ctx"
 DEFAULT_COINS = ("ETH", "BTC")
 
 
@@ -40,6 +46,8 @@ class HyperliquidMarketCollector(BaseCollector):
         enable_trades: bool = True,
         enable_l2book: bool = True,
         enable_asset_ctx: bool = False,
+        enable_candles: bool = False,
+        candle_intervals: Sequence[str] | None = None,
         reconnect_base_seconds: float = 1.0,
         reconnect_max_seconds: float = 30.0,
         reconnect_jitter_ratio: float = 0.2,
@@ -54,6 +62,7 @@ class HyperliquidMarketCollector(BaseCollector):
                 (enable_trades, TRADES_SOURCE_ID),
                 (enable_l2book, L2BOOK_SOURCE_ID),
                 (enable_asset_ctx, ASSET_CTX_SOURCE_ID),
+                (enable_candles, CANDLES_SOURCE_ID),
             )
             if enabled
         )
@@ -65,45 +74,24 @@ class HyperliquidMarketCollector(BaseCollector):
             (TRADES_SOURCE_ID,): "hyperliquid_trades",
             (L2BOOK_SOURCE_ID,): "hyperliquid_l2book",
             (ASSET_CTX_SOURCE_ID,): "hyperliquid_asset_ctx",
+            (CANDLES_SOURCE_ID,): "hyperliquid_candles",
         }.get(self.source_ids, "hyperliquid_market")
-        self._trade_writer = (
-            BatchWriter[tuple[object, ...]](
-                name="hyperliquid_trades_writer",
-                count_limit=count_limit,
-                time_limit_seconds=time_limit_seconds,
-                flush_callback=HyperliquidTradeStore(pool).write_many,
-            )
-            if enable_trades
-            else None
-        )
-        self._l2book_writer = (
-            BatchWriter[tuple[object, ...]](
-                name="hyperliquid_l2book_writer",
-                count_limit=count_limit,
-                time_limit_seconds=time_limit_seconds,
-                flush_callback=HyperliquidL2BookStore(pool).write_many,
-            )
-            if enable_l2book
-            else None
-        )
+        bw = (pool, count_limit, time_limit_seconds)
+        self._trade_writer = build_trade_writer(*bw) if enable_trades else None
+        self._l2book_writer = build_l2book_writer(*bw) if enable_l2book else None
         self._asset_ctx_writer = (
-            BatchWriter[tuple[object, ...]](
-                name="hyperliquid_asset_ctx_writer",
-                count_limit=count_limit,
-                time_limit_seconds=time_limit_seconds,
-                flush_callback=HyperliquidAssetCtxStore(pool).write_many,
-            )
-            if enable_asset_ctx
-            else None
+            build_asset_ctx_writer(*bw) if enable_asset_ctx else None
         )
-        self._writers = [
-            writer
-            for writer in (
+        self._candle_writer = build_candle_writer(*bw) if enable_candles else None
+        self._writers: list[BatchWriter[tuple[object, ...]]] = [
+            w
+            for w in (
                 self._trade_writer,
                 self._l2book_writer,
                 self._asset_ctx_writer,
+                self._candle_writer,
             )
-            if writer is not None
+            if w is not None
         ]
         self._stopped = asyncio.Event()
         self._stopped.set()
@@ -114,6 +102,8 @@ class HyperliquidMarketCollector(BaseCollector):
                 trade_writer=self._trade_writer,
                 l2book_writer=self._l2book_writer,
                 asset_ctx_writer=self._asset_ctx_writer,
+                candle_writer=self._candle_writer,
+                candle_intervals=candle_intervals,
             ),
             reconnect_base_seconds=reconnect_base_seconds,
             reconnect_max_seconds=reconnect_max_seconds,
@@ -146,6 +136,9 @@ class HyperliquidMarketCollector(BaseCollector):
                 )
             else:
                 await manager_task
+            # Defensive: catch writer failures that were set between
+            # wait_failure() completing and us checking here — covers race
+            # where manager exits cleanly but a writer failed silently.
             if error is None:
                 for writer in self._writers:
                     if writer.failure is not None:
@@ -190,6 +183,7 @@ class HyperliquidMarketCollector(BaseCollector):
                 (TRADES_SOURCE_ID, self._trade_writer),
                 (L2BOOK_SOURCE_ID, self._l2book_writer),
                 (ASSET_CTX_SOURCE_ID, self._asset_ctx_writer),
+                (CANDLES_SOURCE_ID, self._candle_writer),
             )
             if writer is not None
         }

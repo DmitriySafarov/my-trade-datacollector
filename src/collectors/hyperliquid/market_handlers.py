@@ -6,6 +6,7 @@ from collections.abc import Mapping, Sequence
 from src.db.batch_writer import BatchWriter
 
 from .asset_ctx_parsing import parse_hyperliquid_asset_ctx
+from .candle_parsing import parse_hyperliquid_candle
 from .l2book_parsing import parse_hyperliquid_l2book
 from .trade_parsing import parse_hyperliquid_trade
 
@@ -13,6 +14,7 @@ from .trade_parsing import parse_hyperliquid_trade
 TRADES_SOURCE_ID = "hl_ws_trades"
 L2BOOK_SOURCE_ID = "hl_ws_l2book"
 ASSET_CTX_SOURCE_ID = "hl_ws_asset_ctx"
+CANDLES_SOURCE_ID = "hl_ws_candles"
 LOGGER = logging.getLogger(__name__)
 
 
@@ -110,9 +112,35 @@ async def handle_asset_ctx_message(
     await writer.add(record.as_copy_row())
 
 
+async def handle_candle_message(
+    message: object,
+    *,
+    writer: BatchWriter[tuple[object, ...]],
+    allowed_coins: Sequence[str],
+) -> None:
+    try:
+        data = require_message_data(message, channel="candle")
+        record = parse_hyperliquid_candle(
+            data,
+            source=CANDLES_SOURCE_ID,
+            allowed_coins=allowed_coins,
+        )
+    except (OSError, OverflowError, ValueError) as error:
+        LOGGER.warning(
+            "hyperliquid_candle_payload_invalid source=%s error=%s payload=%r",
+            CANDLES_SOURCE_ID,
+            error,
+            message,
+        )
+        return
+    await writer.add(record.as_copy_row())
+
+
 def require_message_data(message: object, *, channel: str) -> object:
     if not isinstance(message, Mapping):
         raise ValueError(f"Hyperliquid {channel} message must be a mapping")
     if message.get("channel") != channel:
         raise ValueError(f"Unexpected Hyperliquid {channel} channel")
-    return message.get("data")
+    if "data" not in message:
+        raise ValueError(f"Hyperliquid {channel} message has no data field")
+    return message["data"]

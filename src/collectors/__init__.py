@@ -27,5 +27,6 @@ def build_runtime_collectors(
             count_limit=runtime_settings.default_batch_count,
             time_limit_seconds=runtime_settings.default_batch_seconds,
             enable_asset_ctx=True,
+            enable_candles=True,
         )
     ]
