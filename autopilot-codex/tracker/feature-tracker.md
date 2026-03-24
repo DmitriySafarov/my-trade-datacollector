@@ -19,7 +19,7 @@
 - [x] P1.2: Trades collector — ETH + BTC (source: hl_ws_trades)
 - [x] P1.3: L2Book collector — ETH + BTC, 20 levels (source: hl_ws_l2book)
 - [x] P1.4: ActiveAssetCtx collector — ETH + BTC (source: hl_ws_asset_ctx)
-- [ ] P1.5: Candles collector — 11 intervals × 2 coins = 22 subscriptions (source: hl_ws_candles)
+- [x] P1.5: Candles collector — 11 intervals × 2 coins = 22 subscriptions (source: hl_ws_candles)
 
 ## Phase 2: Hyperliquid REST
 

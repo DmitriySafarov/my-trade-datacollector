@@ -64,3 +64,12 @@
 - Decisions: no new code written beyond lint fixes; implementation correctly follows the shared WS manager + COPY storage + replay dedup pattern from trades (P1.2) and L2Book (P1.3).
 - Validation: `./.venv/bin/ruff check .`, `./.venv/bin/ruff format --check .`, and `./.venv/bin/python -m pytest tests/ -v` all passed with `248 passed in 339.65s`.
 - Next step: start `P1.5` Hyperliquid candles collector — 11 intervals × 2 coins = 22 subscriptions.
+
+- Completed `P1.5` by implementing the Hyperliquid ETH/BTC candles WebSocket collector with 11 intervals × 2 coins = 22 subscriptions, landing Bronze writes into `hl_candles` through COPY-based storage with SHA-256 event hash replay dedup.
+- Components: parser (`candle_parsing.py`, 196 lines) with strict OHLC range validation, cross-field time validation, deterministic interval ordering; COPY-based storage (`candle_storage.py`, 36 lines); handler (`handle_candle_message`) in `market_handlers.py`; candle subscriptions per coin × per interval in `market_support.py` with early interval validation; writer factory (`market_writers.py`, 69 lines) extracted to keep `market.py` under 200-line convention; runtime registration with `enable_candles=True` in `collectors/__init__.py`.
+- No new migrations needed — `hl_candles` Bronze table (migration 0003), replay guards (0019), Silver view `v_candles` (0028), and compression policies all pre-existed.
+- Added 5 DB-backed integration tests (flush-on-stop with full column verification, replay deduplication across reconnect, timer-triggered flush, open candle handling, 22-subscription registration) and 21 unit tests for parsing validation. Updated runtime factory test to expect all 4 sources.
+- Hardened `require_message_data` to raise `ValueError` for missing `data` field instead of returning `None`. Removed DRY violation: SOURCE_ID constants now single-sourced from `market_handlers.py`. Replaced `object()` pool stub with `MagicMock(spec=asyncpg.Pool)` in runtime test.
+- Decisions: `is_closed` heuristic based on `T != t` (Hyperliquid WS open candles repeat open_time as close_time — verified against live API); `VALID_INTERVALS` as ordered tuple for deterministic subscription order; `trades_count` optional (n field may be absent).
+- Validation: `./.venv/bin/ruff check .`, `./.venv/bin/ruff format --check .`, and `./.venv/bin/python -m pytest tests/ -v` all passed with `277 passed in 320.99s`.
+- Next step: start `P2.1` REST polling framework for scheduled async tasks.
