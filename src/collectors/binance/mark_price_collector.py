@@ -1,7 +1,7 @@
-"""Binance Futures aggTrade WebSocket collector.
+"""Binance Futures markPrice @1s WebSocket collector.
 
-Subscribes to ``<symbol>@aggTrade`` streams for ETH + BTC,
-parses incoming messages, and writes to ``bn_agg_trades``
+Subscribes to ``<symbol>@markPrice@1s`` streams for ETH + BTC,
+parses incoming messages, and writes to ``bn_mark_price``
 via a ``BatchWriter`` backed by COPY.
 """
 
@@ -14,23 +14,23 @@ import asyncpg
 
 from src.db.batch_writer import BatchWriter
 
-from .agg_trade_parsing import (
-    SOURCE_ID,
-    BinanceAggTradeRecord,
-    parse_binance_agg_trade,
-)
-from .agg_trade_storage import BinanceAggTradeStore
 from .binance_ws_collector_base import BinanceWsCollectorBase
+from .mark_price_parsing import (
+    SOURCE_ID,
+    BinanceMarkPriceRecord,
+    parse_binance_mark_price,
+)
+from .mark_price_storage import BinanceMarkPriceStore
 from .ws_types import StreamConfig
 
 LOGGER = logging.getLogger(__name__)
 DEFAULT_SYMBOLS = ("ETHUSDT", "BTCUSDT")
 
 
-class BinanceAggTradeCollector(BinanceWsCollectorBase):
-    """Collects Binance Futures aggTrade data via combined WS stream."""
+class BinanceMarkPriceCollector(BinanceWsCollectorBase):
+    """Collects Binance Futures markPrice @1s data via combined WS stream."""
 
-    name = "binance_agg_trades"
+    name = "binance_mark_price"
     source_ids = (SOURCE_ID,)
 
     def __init__(
@@ -48,9 +48,9 @@ class BinanceAggTradeCollector(BinanceWsCollectorBase):
         symbols_upper = tuple(s.upper() for s in symbols)
         if not symbols_upper:
             raise ValueError("at least one symbol is required")
-        store = BinanceAggTradeStore(pool)
+        store = BinanceMarkPriceStore(pool)
         writer: BatchWriter[tuple[object, ...]] = BatchWriter(
-            name="binance_agg_trades_writer",
+            name="binance_mark_price_writer",
             count_limit=count_limit,
             time_limit_seconds=time_limit_seconds,
             flush_callback=store.write_many,
@@ -75,38 +75,38 @@ def _build_stream_configs(
     symbols: tuple[str, ...],
     writer: BatchWriter[tuple[object, ...]],
 ) -> list[StreamConfig]:
-    """Build one ``<symbol_lower>@aggTrade`` stream config per symbol."""
+    """Build one ``<symbol_lower>@markPrice@1s`` stream config per symbol."""
     configs: list[StreamConfig] = []
     for symbol in symbols:
-        stream_name = f"{symbol.lower()}@aggTrade"
+        stream_name = f"{symbol.lower()}@markPrice@1s"
 
         async def handler(
             data: Mapping[str, object],
             *,
             _sym: str = symbol,
         ) -> None:
-            await _handle_agg_trade(data, writer=writer, allowed_symbol=_sym)
+            await _handle_mark_price(data, writer=writer, allowed_symbol=_sym)
 
         configs.append(StreamConfig(stream_name=stream_name, handler=handler))
     return configs
 
 
-async def _handle_agg_trade(
+async def _handle_mark_price(
     data: Mapping[str, object],
     *,
     writer: BatchWriter[tuple[object, ...]],
     allowed_symbol: str,
 ) -> None:
-    """Parse a single aggTrade and enqueue for batch write."""
+    """Parse a single markPriceUpdate and enqueue for batch write."""
     try:
-        record: BinanceAggTradeRecord = parse_binance_agg_trade(
+        record: BinanceMarkPriceRecord = parse_binance_mark_price(
             data,
             source=SOURCE_ID,
             allowed_symbols=(allowed_symbol,),
         )
     except (ValueError, OverflowError) as error:
         LOGGER.warning(
-            "binance_agg_trade_invalid source=%s error=%s payload=%r",
+            "binance_mark_price_invalid source=%s error=%s payload=%r",
             SOURCE_ID,
             error,
             data,
