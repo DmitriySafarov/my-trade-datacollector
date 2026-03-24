@@ -57,7 +57,9 @@ async def test_expired_entries_free_weight() -> None:
     await limiter.acquire(100)
     assert limiter.available_weight() == 0
     await asyncio.sleep(0.15)
-    assert limiter.available_weight() == 100
+    # Trigger purge via acquire — read methods no longer mutate state.
+    await limiter.acquire(1)
+    assert limiter.available_weight() == 99
 
 
 @pytest.mark.asyncio
@@ -104,10 +106,12 @@ async def test_properties_expose_config() -> None:
 @pytest.mark.asyncio
 async def test_partial_expiration_frees_only_expired_weight() -> None:
     """Two acquisitions at different times; only the older one expires."""
-    limiter = SlidingWindowRateLimiter(max_weight=100, window_seconds=0.1)
+    limiter = SlidingWindowRateLimiter(max_weight=100, window_seconds=0.5)
     await limiter.acquire(30)
-    await asyncio.sleep(0.06)
+    await asyncio.sleep(0.3)
     await limiter.acquire(20)
-    await asyncio.sleep(0.06)
-    # First entry (30) should have expired, second (20) still active.
-    assert limiter.available_weight() == 80
+    await asyncio.sleep(0.3)
+    # First entry (30) expired; trigger purge via acquire.
+    await limiter.acquire(1)
+    # 30 expired, 20+1 active → 79 available
+    assert limiter.available_weight() == 79

@@ -25,13 +25,16 @@ class _StubPoller(BaseRestPoller):
         self.poll_count = 0
         self.poll_error: Exception | None = None
         self.poll_barrier: asyncio.Event | None = None
+        self.poll_entered: asyncio.Event | None = None
 
     async def _poll(self, session: aiohttp.ClientSession) -> None:
+        if self.poll_entered is not None:
+            self.poll_entered.set()
         if self.poll_barrier is not None:
             await self.poll_barrier.wait()
-        self.poll_count += 1
         if self.poll_error is not None:
             raise self.poll_error
+        self.poll_count += 1
 
 
 def _make_poller(**overrides: Any) -> _StubPoller:
@@ -79,12 +82,14 @@ async def test_stop_during_sleep_exits_promptly() -> None:
 @pytest.mark.asyncio
 async def test_wait_ready_resolves_after_first_success() -> None:
     barrier = asyncio.Event()
+    poll_entered = asyncio.Event()
     poller = _make_poller()
     poller.poll_barrier = barrier
+    poller.poll_entered = poll_entered
 
     task = asyncio.create_task(poller.start())
-    # Poll is blocked until we set the barrier.
-    await asyncio.sleep(0.02)
+    # Deterministically wait until _poll is entered (no flaky sleep).
+    await asyncio.wait_for(poll_entered.wait(), timeout=5.0)
     assert not poller._ready_event.is_set()
 
     barrier.set()
@@ -168,6 +173,42 @@ async def test_startup_failure_raises_after_max_attempts() -> None:
 
 
 @pytest.mark.asyncio
+async def test_wait_ready_unblocks_and_raises_on_startup_failure() -> None:
+    """wait_ready() must not deadlock when startup fails — it should raise."""
+    poller = _make_poller(max_startup_failures=2, backoff_base_seconds=0.01)
+    poller.poll_error = ConnectionError("permanent")
+
+    task = asyncio.create_task(poller.start())
+    with pytest.raises(RuntimeError, match="failed 2 consecutive times"):
+        await asyncio.wait_for(poller.wait_ready(), timeout=5.0)
+    # The start task should also have completed with the same error.
+    with pytest.raises(RuntimeError, match="failed 2 consecutive times"):
+        await task
+
+
+@pytest.mark.asyncio
+async def test_wait_ready_unblocks_on_task_cancellation() -> None:
+    """wait_ready() must not deadlock if the start task is cancelled pre-ready."""
+    barrier = asyncio.Event()
+    poll_entered = asyncio.Event()
+    poller = _make_poller(interval_seconds=60.0)
+    poller.poll_barrier = barrier  # Block indefinitely in first poll
+    poller.poll_entered = poll_entered  # Signals when _poll is entered
+
+    task = asyncio.create_task(poller.start())
+    # Wait until _poll is actually running (no flaky sleep).
+    await asyncio.wait_for(poll_entered.wait(), timeout=5.0)
+
+    # Cancel the start task while it's blocked in _poll (pre-ready).
+    task.cancel()
+    with pytest.raises(RuntimeError, match="terminated before becoming ready"):
+        await asyncio.wait_for(poller.wait_ready(), timeout=5.0)
+    # The start task should have been cancelled.
+    with pytest.raises(asyncio.CancelledError):
+        await task
+
+
+@pytest.mark.asyncio
 async def test_errors_after_ready_do_not_raise() -> None:
     """Once ready, errors are logged but don't kill the poller."""
     poller = _make_poller(interval_seconds=0.01, backoff_base_seconds=0.01)
@@ -197,8 +238,7 @@ async def test_errors_after_ready_do_not_raise() -> None:
     assert snap["last_error_message"] != ""
 
 
-@pytest.mark.asyncio
-async def test_backoff_increases_sleep_on_consecutive_failures() -> None:
+def test_backoff_increases_sleep_on_consecutive_failures() -> None:
     poller = _make_poller(
         backoff_base_seconds=0.1,
         backoff_max_seconds=10.0,
@@ -216,8 +256,7 @@ async def test_backoff_increases_sleep_on_consecutive_failures() -> None:
     assert s3 > s2
 
 
-@pytest.mark.asyncio
-async def test_backoff_caps_at_max() -> None:
+def test_backoff_caps_at_max() -> None:
     poller = _make_poller(
         backoff_base_seconds=1.0,
         backoff_max_seconds=5.0,
@@ -228,16 +267,14 @@ async def test_backoff_caps_at_max() -> None:
     assert sleep <= 6.5
 
 
-@pytest.mark.asyncio
-async def test_normal_sleep_has_jitter() -> None:
+def test_normal_sleep_has_jitter() -> None:
     poller = _make_poller(interval_seconds=10.0, jitter_ratio=0.1)
     sleeps = {poller._compute_sleep_seconds() for _ in range(20)}
     # With 10% jitter on 10s, we expect variation.
     assert len(sleeps) > 1
 
 
-@pytest.mark.asyncio
-async def test_normal_sleep_non_negative() -> None:
+def test_normal_sleep_non_negative() -> None:
     poller = _make_poller(interval_seconds=0.5, jitter_ratio=0.0)
     assert poller._compute_sleep_seconds() >= 0.0
 
@@ -247,12 +284,14 @@ async def test_normal_sleep_non_negative() -> None:
 # ------------------------------------------------------------------
 
 
-@pytest.mark.asyncio
-async def test_post_json_calls_rate_limiter() -> None:
+def test_rate_limiter_attached_at_construction() -> None:
+    """Verify that rate_limiter kwarg is stored and accessible."""
     limiter = SlidingWindowRateLimiter(max_weight=1200, window_seconds=60)
     poller = _make_poller(rate_limiter=limiter)
+    assert poller._rate_limiter is limiter
     assert limiter.available_weight() == 1200
 
-    # Verify helpers exist and are bound.
-    assert hasattr(poller, "_post_json")
-    assert hasattr(poller, "_get_json")
+
+def test_no_rate_limiter_by_default() -> None:
+    poller = _make_poller()
+    assert poller._rate_limiter is None

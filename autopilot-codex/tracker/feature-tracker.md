@@ -24,12 +24,12 @@
 ## Phase 2: Hyperliquid REST
 
 - [x] P2.1: REST polling framework (scheduled async tasks)
-- [ ] P2.2: Candles snapshot collector — every 4h (source: hl_rest_candles)
-- [ ] P2.3: Funding history collector — every 8h (source: hl_rest_funding)
+- [x] P2.2: Candles snapshot collector — every 4h (source: hl_rest_candles)
+- [x] P2.3: Funding history collector — every 8h (source: hl_rest_funding)
 
 ## Phase 3: Binance WS
 
-- [ ] P3.1: Combined stream connection (wss://fstream.binance.com/stream?streams=..., reconnect with backoff)
+- [x] P3.1: Combined stream connection (wss://fstream.binance.com/stream?streams=..., reconnect with backoff)
 - [ ] P3.2: aggTrade collector — ETH + BTC (source: bn_ws_agg_trades)
 - [ ] P3.3: markPrice @1s collector — ETH + BTC (source: bn_ws_mark_price)
 - [ ] P3.4: depth20 @100ms collector — ETH + BTC (source: bn_ws_depth)

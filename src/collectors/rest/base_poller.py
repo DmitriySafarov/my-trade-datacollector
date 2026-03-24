@@ -4,15 +4,14 @@ from __future__ import annotations
 
 import asyncio
 import logging
-import random
 from abc import abstractmethod
-from time import monotonic
 from typing import Any
 
 import aiohttp
 
 from src.collectors.base import BaseCollector
 
+from ._poll_loop import compute_sleep_seconds, run_poll_loop
 from .rate_limiter import SlidingWindowRateLimiter
 
 LOGGER = logging.getLogger(__name__)
@@ -52,8 +51,11 @@ class BaseRestPoller(BaseCollector):
         self._backoff_base_seconds = backoff_base_seconds
         self._backoff_max_seconds = backoff_max_seconds
 
+        # Safe in Python 3.10+: asyncio.Event() no longer binds to a
+        # specific event loop at creation time.
         self._stop_event = asyncio.Event()
         self._ready_event = asyncio.Event()
+        self._startup_error: BaseException | None = None
         self._consecutive_failures = 0
         self._last_success_at: float | None = None
         self._last_error_at: float | None = None
@@ -61,12 +63,18 @@ class BaseRestPoller(BaseCollector):
         self._total_polls = 0
         self._total_errors = 0
 
-    # ------------------------------------------------------------------
-    # BaseCollector interface
-    # ------------------------------------------------------------------
+    # -- BaseCollector interface -------------------------------------------
 
     async def start(self) -> None:
+        """Run the poll loop until stopped.
+
+        **Blocking**: this coroutine runs indefinitely (until ``stop()``
+        is called).  Callers must wrap it in ``asyncio.create_task()``
+        to avoid blocking the event loop.
+        """
         self._stop_event.clear()
+        self._ready_event.clear()
+        self._startup_error = None
         async with aiohttp.ClientSession(timeout=self._timeout) as session:
             await self._poll_loop(session)
 
@@ -75,6 +83,8 @@ class BaseRestPoller(BaseCollector):
 
     async def wait_ready(self) -> None:
         await self._ready_event.wait()
+        if self._startup_error is not None:
+            raise self._startup_error
 
     def health_snapshot(self) -> dict[str, object]:
         return {
@@ -89,18 +99,14 @@ class BaseRestPoller(BaseCollector):
             "last_error_message": self._last_error_message,
         }
 
-    # ------------------------------------------------------------------
-    # Abstract hook for subclasses
-    # ------------------------------------------------------------------
+    # -- Abstract hook for subclasses --------------------------------------
 
     @abstractmethod
     async def _poll(self, session: aiohttp.ClientSession) -> None:
         """Execute one poll cycle.  Raise on failure — the base class
         handles retry logic and health bookkeeping."""
 
-    # ------------------------------------------------------------------
-    # Convenience helpers for subclass _poll implementations
-    # ------------------------------------------------------------------
+    # -- Convenience helpers for subclass _poll implementations ------------
 
     async def _post_json(
         self,
@@ -132,56 +138,10 @@ class BaseRestPoller(BaseCollector):
             response.raise_for_status()
             return await response.json()
 
-    # ------------------------------------------------------------------
-    # Internal poll loop
-    # ------------------------------------------------------------------
+    # -- Internal poll loop (impl in _poll_loop.py) ------------------------
 
     async def _poll_loop(self, session: aiohttp.ClientSession) -> None:
-        ready_signalled = False
-        while not self._stop_event.is_set():
-            try:
-                await self._poll(session)
-                self._total_polls += 1
-                self._consecutive_failures = 0
-                self._last_success_at = monotonic()
-                if not ready_signalled:
-                    self._ready_event.set()
-                    ready_signalled = True
-            except Exception as error:
-                self._total_errors += 1
-                self._consecutive_failures += 1
-                self._last_error_at = monotonic()
-                self._last_error_message = repr(error)
-                LOGGER.warning(
-                    "rest_poll_failed source=%s consecutive=%d error=%r",
-                    self.name,
-                    self._consecutive_failures,
-                    error,
-                )
-                if (
-                    not ready_signalled
-                    and self._consecutive_failures >= self._max_startup_failures
-                ):
-                    raise RuntimeError(
-                        f"REST poller {self.name} failed "
-                        f"{self._consecutive_failures} consecutive times "
-                        f"during startup"
-                    ) from error
-            sleep_seconds = self._compute_sleep_seconds()
-            try:
-                await asyncio.wait_for(self._stop_event.wait(), timeout=sleep_seconds)
-                return  # stop was requested
-            except asyncio.TimeoutError:
-                continue  # normal: sleep elapsed, loop again
+        await run_poll_loop(self, session)
 
     def _compute_sleep_seconds(self) -> float:
-        if self._consecutive_failures > 0:
-            backoff = min(
-                self._backoff_base_seconds * (2 ** (self._consecutive_failures - 1)),
-                self._backoff_max_seconds,
-            )
-            jitter = random.uniform(0, backoff * 0.2)
-            return backoff + jitter
-        base = self._interval_seconds
-        jitter = random.uniform(-base * self._jitter_ratio, base * self._jitter_ratio)
-        return max(0.0, base + jitter)
+        return compute_sleep_seconds(self)

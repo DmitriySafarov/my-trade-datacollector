@@ -63,12 +63,26 @@ class SlidingWindowRateLimiter:
             await asyncio.sleep(max(0.01, wait))
 
     def available_weight(self) -> int:
-        """Return currently available weight (non-blocking snapshot)."""
-        self._purge_expired()
+        """Return currently available weight (non-blocking snapshot).
+
+        **IMPORTANT**: Do not use this value to gate ``acquire()`` calls or
+        make budget decisions.  The result may undercount available weight
+        because expired entries are not purged without holding the lock.
+        Only ``acquire()`` guarantees an accurate, consistent view.
+
+        This method is intended for diagnostics and health reporting only.
+        """
         return max(0, self._max_weight - self._current_weight)
 
     def snapshot(self) -> dict[str, object]:
-        self._purge_expired()
+        """Return a point-in-time snapshot without mutating internal state.
+
+        Note: ``current_weight`` and ``pending_entries`` are read without
+        holding the lock, so they may be mutually inconsistent if a
+        concurrent ``acquire()`` is mid-flight on another task.  This is
+        acceptable for health/diagnostics — use ``acquire()`` for accurate
+        budget decisions.
+        """
         return {
             "max_weight": self._max_weight,
             "current_weight": self._current_weight,
