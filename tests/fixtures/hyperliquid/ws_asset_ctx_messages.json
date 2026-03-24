@@ -1,0 +1,44 @@
+[
+  {
+    "channel": "activeAssetCtx",
+    "data": {
+      "coin": "ETH",
+      "ctx": {
+        "funding": "-0.0000001002",
+        "openInterest": "553194.1281999996",
+        "prevDayPx": "2078.8",
+        "dayNtlVlm": "1756640673.5487046242",
+        "premium": "-0.0004228727",
+        "oraclePx": "2128.3",
+        "markPx": "2127.2",
+        "midPx": "2127.35",
+        "impactPxs": [
+          "2127.3",
+          "2127.4"
+        ],
+        "dayBaseVlm": "840005.1201000015"
+      }
+    }
+  },
+  {
+    "channel": "activeAssetCtx",
+    "data": {
+      "coin": "BTC",
+      "ctx": {
+        "funding": "0.0000038498",
+        "openInterest": "25559.40104",
+        "prevDayPx": "68696.0",
+        "dayNtlVlm": "3946742275.1811518669",
+        "premium": "-0.0005821714",
+        "oraclePx": "70426.0",
+        "markPx": "70388.0",
+        "midPx": "70384.5",
+        "impactPxs": [
+          "70366.9",
+          "70385.0"
+        ],
+        "dayBaseVlm": "56979.5986200002"
+      }
+    }
+  }
+]

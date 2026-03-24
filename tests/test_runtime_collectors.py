@@ -20,7 +20,11 @@ def test_runtime_collector_factory_builds_hyperliquid_market_collector() -> None
     assert len(collectors) == 1
     collector = collectors[0]
     assert isinstance(collector, HyperliquidMarketCollector)
-    assert collector.source_ids == ("hl_ws_trades", "hl_ws_l2book")
+    assert collector.source_ids == (
+        "hl_ws_trades",
+        "hl_ws_l2book",
+        "hl_ws_asset_ctx",
+    )
     assert collector.health_snapshot()["writers"] == {
         "hl_ws_trades": {
             "name": "hyperliquid_trades_writer",
@@ -31,6 +35,13 @@ def test_runtime_collector_factory_builds_hyperliquid_market_collector() -> None
         },
         "hl_ws_l2book": {
             "name": "hyperliquid_l2book_writer",
+            "buffer_size": 0,
+            "count_limit": 123,
+            "time_limit_seconds": 4.5,
+            "last_error": "",
+        },
+        "hl_ws_asset_ctx": {
+            "name": "hyperliquid_asset_ctx_writer",
             "buffer_size": 0,
             "count_limit": 123,
             "time_limit_seconds": 4.5,

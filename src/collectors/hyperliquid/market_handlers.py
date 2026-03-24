@@ -5,12 +5,14 @@ from collections.abc import Mapping, Sequence
 
 from src.db.batch_writer import BatchWriter
 
+from .asset_ctx_parsing import parse_hyperliquid_asset_ctx
 from .l2book_parsing import parse_hyperliquid_l2book
 from .trade_parsing import parse_hyperliquid_trade
 
 
 TRADES_SOURCE_ID = "hl_ws_trades"
 L2BOOK_SOURCE_ID = "hl_ws_l2book"
+ASSET_CTX_SOURCE_ID = "hl_ws_asset_ctx"
 LOGGER = logging.getLogger(__name__)
 
 
@@ -77,6 +79,30 @@ async def handle_l2book_message(
         LOGGER.warning(
             "hyperliquid_l2book_payload_invalid source=%s error=%s payload=%r",
             L2BOOK_SOURCE_ID,
+            error,
+            message,
+        )
+        return
+    await writer.add(record.as_copy_row())
+
+
+async def handle_asset_ctx_message(
+    message: object,
+    *,
+    writer: BatchWriter[tuple[object, ...]],
+    allowed_coins: Sequence[str],
+) -> None:
+    try:
+        data = require_message_data(message, channel="activeAssetCtx")
+        record = parse_hyperliquid_asset_ctx(
+            data,
+            source=ASSET_CTX_SOURCE_ID,
+            allowed_coins=allowed_coins,
+        )
+    except (OSError, OverflowError, ValueError) as error:
+        LOGGER.warning(
+            "hyperliquid_asset_ctx_payload_invalid source=%s error=%s payload=%r",
+            ASSET_CTX_SOURCE_ID,
             error,
             message,
         )
