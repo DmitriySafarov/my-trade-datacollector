@@ -7,7 +7,11 @@ from src.config.bootstrap import BootstrapConfig
 from src.config.runtime import RuntimeSettings
 
 from .base import BaseCollector
-from .binance import BinanceAggTradeCollector, BinanceMarkPriceCollector
+from .binance import (
+    BinanceAggTradeCollector,
+    BinanceDepthCollector,
+    BinanceMarkPriceCollector,
+)
 from .hyperliquid import HyperliquidMarketCollector
 from .rest import HyperliquidCandlesPoller, HyperliquidFundingPoller
 from .rest.rate_limiter import SlidingWindowRateLimiter
@@ -50,6 +54,11 @@ def build_runtime_collectors(
             time_limit_seconds=runtime_settings.default_batch_seconds,
         ),
         BinanceMarkPriceCollector(
+            pool=pool,
+            count_limit=runtime_settings.default_batch_count,
+            time_limit_seconds=runtime_settings.default_batch_seconds,
+        ),
+        BinanceDepthCollector(
             pool=pool,
             count_limit=runtime_settings.default_batch_count,
             time_limit_seconds=runtime_settings.default_batch_seconds,

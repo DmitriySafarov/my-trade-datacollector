@@ -5,7 +5,11 @@ from unittest.mock import MagicMock
 import asyncpg
 
 from src.collectors import build_runtime_collectors
-from src.collectors.binance import BinanceAggTradeCollector, BinanceMarkPriceCollector
+from src.collectors.binance import (
+    BinanceAggTradeCollector,
+    BinanceDepthCollector,
+    BinanceMarkPriceCollector,
+)
 from src.collectors.hyperliquid import HyperliquidMarketCollector
 from src.collectors.rest import HyperliquidCandlesPoller, HyperliquidFundingPoller
 from src.config.runtime import RuntimeSettings
@@ -26,7 +30,7 @@ def test_runtime_collector_factory_builds_all_collectors() -> None:
         ),
     )
 
-    assert len(collectors) == 5
+    assert len(collectors) == 6
 
     ws_collector = collectors[0]
     assert isinstance(ws_collector, HyperliquidMarketCollector)
@@ -91,3 +95,8 @@ def test_runtime_collector_factory_builds_all_collectors() -> None:
     assert isinstance(bn_mark_price, BinanceMarkPriceCollector)
     assert bn_mark_price.source_ids == ("bn_ws_mark_price",)
     assert bn_mark_price.name == "binance_mark_price"
+
+    bn_depth = collectors[5]
+    assert isinstance(bn_depth, BinanceDepthCollector)
+    assert bn_depth.source_ids == ("bn_ws_depth",)
+    assert bn_depth.name == "binance_depth"

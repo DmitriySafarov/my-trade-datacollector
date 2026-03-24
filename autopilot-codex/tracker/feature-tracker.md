@@ -32,7 +32,7 @@
 - [x] P3.1: Combined stream connection (wss://fstream.binance.com/stream?streams=..., reconnect with backoff)
 - [x] P3.2: aggTrade collector — ETH + BTC (source: bn_ws_agg_trades)
 - [x] P3.3: markPrice @1s collector — ETH + BTC (source: bn_ws_mark_price)
-- [ ] P3.4: depth20 @100ms collector — ETH + BTC (source: bn_ws_depth)
+- [x] P3.4: depth20 @100ms collector — ETH + BTC (source: bn_ws_depth)
 - [ ] P3.5: forceOrder (liquidations) collector — ETH + BTC (source: bn_ws_liquidations)
 - [ ] P3.6: kline 1m collector — ETH + BTC (source: bn_ws_candles)
 - [ ] P3.7: ticker + miniTicker + bookTicker collectors (sources: bn_ws_ticker, bn_ws_mini_ticker, bn_ws_book_ticker)
